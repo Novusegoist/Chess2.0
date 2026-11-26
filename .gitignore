@@ -1,0 +1,55 @@
+# --- Unity: генерируется заново, в репозиторий не кладём ---
+/[Ll]ibrary/
+/[Tt]emp/
+/[Oo]bj/
+/[Bb]uild/
+/[Bb]uilds/
+/[Ll]ogs/
+/[Uu]ser[Ss]ettings/
+/[Mm]emoryCaptures/
+/[Rr]ecordings/
+
+# Пустые .meta от удалённых папок/файлов не нужны, а вот обычные .meta — обязательно хранить.
+/[Aa]ssets/AssetStoreTools*
+
+# Кэш Gradle, Android и iOS-сборок
+.gradle/
+*.apk
+*.aab
+*.unitypackage
+*.app
+
+# Сборки
+crashlytics-build.properties
+sysinfo.txt
+
+# --- IDE: проекты генерирует Unity ---
+.vs/
+.idea/
+.vscode/
+*.csproj
+*.unityproj
+*.sln
+*.slnx
+*.suo
+*.tmp
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+
+# --- Тесты ядра (Tools/CoreTests): результаты сборки dotnet ---
+/Tools/**/bin/
+/Tools/**/obj/
+# А сам проект тестов нужен (он перекрывается правилом *.csproj выше).
+!/Tools/**/*.csproj
+
+# --- Система ---
+.DS_Store
+Thumbs.db
+Desktop.ini

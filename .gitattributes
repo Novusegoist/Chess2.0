@@ -1,0 +1,30 @@
+# Текстовые файлы — с нормализацией переносов строк.
+* text=auto
+
+# Unity хранит сцены, префабы и настройки в YAML: сравнение по строкам,
+# а сливать их лучше инструментом UnityYAMLMerge (Unity Smart Merge).
+*.unity    text merge=unityyamlmerge eol=lf
+*.prefab   text merge=unityyamlmerge eol=lf
+*.asset    text merge=unityyamlmerge eol=lf
+*.meta     text merge=unityyamlmerge eol=lf
+*.mat      text merge=unityyamlmerge eol=lf
+*.anim     text merge=unityyamlmerge eol=lf
+*.controller text merge=unityyamlmerge eol=lf
+
+*.cs       text diff=csharp
+*.asmdef   text
+*.json     text
+*.md       text
+
+# Бинарные файлы — не трогать.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.psd  binary
+*.ttf  binary
+*.otf  binary
+*.wav  binary
+*.mp3  binary
+*.ogg  binary
+*.fbx  binary
+*.dll  binary
