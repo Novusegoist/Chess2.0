@@ -212,7 +212,7 @@ public class GameManager : MonoBehaviour
             Clock.Stop();
 
         Deselect();
-        mBoard.SetLastMove(State.LastMove);
+        mBoard.SetLastMove(AppSettings.ShowLastMove ? State.LastMove : null);
         mPieceManager.Sync(State, mEffects);
         UpdateStatus();
 
@@ -476,7 +476,8 @@ public class GameManager : MonoBehaviour
     {
         mSelected = sq;
         mSelectedMoves = Chess2.Core.Rules.GetLegalMovesFrom(State, sq);
-        mBoard.ShowMoves(sq, mSelectedMoves);
+        // Без подсказок подсвечиваем только выбранную клетку — ходы игрок ищет сам.
+        mBoard.ShowMoves(sq, AppSettings.ShowMoveHints ? mSelectedMoves : new List<Move>());
         UpdateSelectionUi();
     }
 
@@ -537,6 +538,11 @@ public class GameManager : MonoBehaviour
 
         if (mHintText == null)
             return;
+        if (!AppSettings.ShowHintText)
+        {
+            mHintText.text = "";
+            return;
+        }
         var parts = new List<string>();
         if (hasDouble) parts.Add("<color=#3cd0d8>бирюзовые</color> — двойной прыжок (раз за игру)");
         if (hasDisembark) parts.Add("<color=#6fd67c>зелёные точки</color> — высадить пассажира");

@@ -89,6 +89,104 @@ public static class AppSettings
         set => SetBool("trojan", value);
     }
 
+    #region Графика
+
+    /// <summary>true — полный экран (окно без рамки на весь экран), false — окно.</summary>
+    public static bool Fullscreen
+    {
+        get => GetBool("fullscreen", true);
+        set => SetBool("fullscreen", value);
+    }
+
+    /// <summary>
+    /// Размер окна «1280x720» в оконном режиме. Запоминается, когда окно тянут мышкой.
+    /// Пусто — 1280x720 (или меньше, если монитор маленький).
+    /// </summary>
+    public static string WindowSize
+    {
+        get => PlayerPrefs.GetString(Prefix + "windowSize", "");
+        set => PlayerPrefs.SetString(Prefix + "windowSize", value);
+    }
+
+    /// <summary>Разрешение полного экрана «1920x1080». Пусто — разрешение монитора.</summary>
+    public static string Resolution
+    {
+        get => PlayerPrefs.GetString(Prefix + "resolution", "");
+        set => PlayerPrefs.SetString(Prefix + "resolution", value);
+    }
+
+    /// <summary>Ограничение кадров в секунду. 0 — без ограничения.</summary>
+    public static int FpsLimit
+    {
+        get => PlayerPrefs.GetInt(Prefix + "fps", 60);
+        set => PlayerPrefs.SetInt(Prefix + "fps", value);
+    }
+
+    public static readonly int[] FpsOptions = { 30, 60, 120, 144, 0 };
+
+    /// <summary>Вертикальная синхронизация: кадры под частоту монитора, без разрывов картинки.</summary>
+    public static bool VSync
+    {
+        get => GetBool("vsync", false);
+        set => SetBool("vsync", value);
+    }
+
+    /// <summary>Яркость: 1 — как есть, 0.5 … 1.5.</summary>
+    public static float Brightness
+    {
+        get => Mathf.Clamp(PlayerPrefs.GetFloat(Prefix + "brightness", 1f), 0.5f, 1.5f);
+        set => PlayerPrefs.SetFloat(Prefix + "brightness", Mathf.Clamp(value, 0.5f, 1.5f));
+    }
+
+    #endregion
+
+    #region Звук
+
+    public static float MasterVolume
+    {
+        get => Mathf.Clamp01(PlayerPrefs.GetFloat(Prefix + "volMaster", 1f));
+        set => PlayerPrefs.SetFloat(Prefix + "volMaster", Mathf.Clamp01(value));
+    }
+
+    public static float SoundVolume
+    {
+        get => Mathf.Clamp01(PlayerPrefs.GetFloat(Prefix + "volSound", 0.8f));
+        set => PlayerPrefs.SetFloat(Prefix + "volSound", Mathf.Clamp01(value));
+    }
+
+    public static float MusicVolume
+    {
+        get => Mathf.Clamp01(PlayerPrefs.GetFloat(Prefix + "volMusic", 0.6f));
+        set => PlayerPrefs.SetFloat(Prefix + "volMusic", Mathf.Clamp01(value));
+    }
+
+    #endregion
+
+    #region Игра
+
+    /// <summary>Показывать точки и кольца возможных ходов у выбранной фигуры.</summary>
+    public static bool ShowMoveHints
+    {
+        get => GetBool("moveHints", true);
+        set => SetBool("moveHints", value);
+    }
+
+    /// <summary>Подсвечивать, откуда и куда был последний ход.</summary>
+    public static bool ShowLastMove
+    {
+        get => GetBool("lastMove", true);
+        set => SetBool("lastMove", value);
+    }
+
+    /// <summary>Подсказка под доской о том, что значат цвета меток.</summary>
+    public static bool ShowHintText
+    {
+        get => GetBool("hintText", true);
+        set => SetBool("hintText", value);
+    }
+
+    #endregion
+
     public static void Save() => PlayerPrefs.Save();
 
     private static bool GetBool(string key, bool def) => PlayerPrefs.GetInt(Prefix + key, def ? 1 : 0) != 0;

@@ -139,6 +139,101 @@ public static class UiKit
         return rt;
     }
 
+    /// <summary>Строка настроек: подпись слева, элемент управления справа. Возвращает место под элемент.</summary>
+    public static RectTransform CreateSettingRow(Transform parent, string label, float height = 58f)
+    {
+        var row = CreateUi("Row " + label, parent);
+        row.sizeDelta = new Vector2(1000, height);
+
+        var text = CreateText("Label", row, label, 30, TextLight, TextAnchor.MiddleRight);
+        var trt = (RectTransform)text.transform;
+        trt.anchorMin = new Vector2(0, 0);
+        trt.anchorMax = new Vector2(0.5f, 1);
+        trt.offsetMin = Vector2.zero;
+        trt.offsetMax = new Vector2(-24, 0);
+
+        var slot = CreateUi("Control", row);
+        slot.anchorMin = new Vector2(0.5f, 0);
+        slot.anchorMax = new Vector2(1, 1);
+        slot.offsetMin = Vector2.zero;
+        slot.offsetMax = Vector2.zero;
+        return slot;
+    }
+
+    /// <summary>Переключатель «&lt; значение &gt;». step(-1) / step(+1) — листать варианты.</summary>
+    public static Text CreateSelector(RectTransform slot, Action<int> step)
+    {
+        var left = CreatePlateButton(slot, "<", new Vector2(56, 52), () => step(-1), 34);
+        Place((RectTransform)left.transform, new Vector2(0, 0.5f), new Vector2(28, 0));
+
+        var value = CreateText("Value", slot, "", 30, TextLight);
+        var vrt = (RectTransform)value.transform;
+        vrt.anchorMin = vrt.anchorMax = new Vector2(0, 0.5f);
+        vrt.sizeDelta = new Vector2(300, 52);
+        vrt.anchoredPosition = new Vector2(56 + 150 + 8, 0);
+
+        var right = CreatePlateButton(slot, ">", new Vector2(56, 52), () => step(+1), 34);
+        Place((RectTransform)right.transform, new Vector2(0, 0.5f), new Vector2(56 + 300 + 16 + 28, 0));
+        return value;
+    }
+
+    /// <summary>Ползунок с подписью значения справа (например, «80%»).</summary>
+    public static Slider CreateSlider(RectTransform slot, float min, float max, Action<float> changed, out Text valueText)
+    {
+        var rt = CreateUi("Slider", slot, typeof(Slider));
+        rt.anchorMin = rt.anchorMax = new Vector2(0, 0.5f);
+        rt.pivot = new Vector2(0, 0.5f);
+        rt.sizeDelta = new Vector2(330, 30);
+        rt.anchoredPosition = new Vector2(8, 0);
+
+        var back = CreateUi("Background", rt, typeof(Image));
+        Stretch(back).offsetMin = new Vector2(0, 9);
+        back.offsetMax = new Vector2(0, -9);
+        back.GetComponent<Image>().color = new Color32(20, 24, 22, 255);
+
+        var fillArea = CreateUi("Fill Area", rt);
+        Stretch(fillArea).offsetMin = new Vector2(0, 9);
+        fillArea.offsetMax = new Vector2(0, -9);
+        var fill = CreateUi("Fill", fillArea, typeof(Image));
+        fill.GetComponent<Image>().color = new Color32(0, 165, 230, 255);
+        fill.sizeDelta = Vector2.zero;
+
+        var handleArea = CreateUi("Handle Area", rt);
+        Stretch(handleArea).offsetMin = new Vector2(12, 0);
+        handleArea.offsetMax = new Vector2(-12, 0);
+        var handle = CreateUi("Handle", handleArea, typeof(Image));
+        handle.sizeDelta = new Vector2(24, 0);
+        var handleImage = handle.GetComponent<Image>();
+        handleImage.color = new Color32(214, 240, 242, 255);
+        handle.gameObject.AddComponent<Outline>().effectColor = TextDark;
+
+        var slider = rt.GetComponent<Slider>();
+        slider.fillRect = fill;
+        slider.handleRect = handle;
+        slider.targetGraphic = handleImage;
+        slider.direction = Slider.Direction.LeftToRight;
+        slider.minValue = min;
+        slider.maxValue = max;
+        var nav = slider.navigation;
+        nav.mode = Navigation.Mode.None;
+        slider.navigation = nav;
+        slider.onValueChanged.AddListener(v => changed(v));
+
+        valueText = CreateText("Value", slot, "", 28, TextLight, TextAnchor.MiddleLeft);
+        var vrt = (RectTransform)valueText.transform;
+        vrt.anchorMin = vrt.anchorMax = new Vector2(0, 0.5f);
+        vrt.pivot = new Vector2(0, 0.5f);
+        vrt.sizeDelta = new Vector2(120, 40);
+        vrt.anchoredPosition = new Vector2(8 + 330 + 18, 0);
+        return slider;
+    }
+
+    private static void Place(RectTransform rt, Vector2 anchor, Vector2 position)
+    {
+        rt.anchorMin = rt.anchorMax = anchor;
+        rt.anchoredPosition = position;
+    }
+
     /// <summary>Поле ввода текста (например, IP-адреса).</summary>
     public static InputField CreateInputField(Transform parent, Vector2 size, string placeholder, int fontSize = 32)
     {

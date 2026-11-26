@@ -58,10 +58,7 @@ public class MenuManager : MonoBehaviour
     private Text mLocalModeHint;
 
     // Опции.
-    private MenuButton mQueenKnightButton;
-    private MenuButton mPierceButton;
-    private MenuButton mPierceOwnButton;
-    private MenuButton mTrojanButton;
+    private readonly OptionsScreen mOptions = new OptionsScreen();
     private readonly List<MenuButton> mSoundButtons = new List<MenuButton>();
     private readonly List<MenuButton> mMusicButtons = new List<MenuButton>();
 
@@ -147,7 +144,9 @@ public class MenuManager : MonoBehaviour
             mResignButton.gameObject.SetActive(mGame.State != null && !mGame.State.IsOver);
         }
         if (screen == Screen.Options)
-            RefreshOptions();
+            mOptions.Refresh();
+        if (screen == Screen.Main)
+            RefreshAudioIcons(); // звук могли переключить в опциях
     }
 
     private void StartBotGame()
@@ -354,7 +353,8 @@ public class MenuManager : MonoBehaviour
         mScreens[Screen.HostSetup] = BuildHostSetup();
         mScreens[Screen.Join] = BuildJoin();
         mScreens[Screen.Waiting] = BuildWaiting();
-        mScreens[Screen.Options] = BuildOptions();
+        mScreens[Screen.Options] = mOptions.Build(mCanvas.transform, CloseOptions,
+            (parent, text, size, offset) => Title(parent, text, size, offset), BottomBar);
         mScreens[Screen.Pause] = BuildPause();
         mScreens[Screen.GameOver] = BuildGameOver();
     }
@@ -563,46 +563,6 @@ public class MenuManager : MonoBehaviour
         return root.gameObject;
     }
 
-    private GameObject BuildOptions()
-    {
-        var root = ScreenRoot("Options", UiKit.Background);
-        Title(root, "Опции", 64, new Vector2(0, -70));
-
-        var col = UiKit.CreateColumn("Content", root, 16);
-        Place(col, new Vector2(0.5f, 0.5f), new Vector2(0, 20));
-
-        Label(col, "Способности загоревшихся фигур (для новых партий)");
-        var size = new Vector2(680, 66);
-        mTrojanButton = UiKit.CreatePlateButton(col, "", size, () =>
-        {
-            AppSettings.TrojanKnight = !AppSettings.TrojanKnight;
-            RefreshOptions();
-        }, 30);
-        mQueenKnightButton = UiKit.CreatePlateButton(col, "", size, () =>
-        {
-            AppSettings.QueenMovesAsKnight = !AppSettings.QueenMovesAsKnight;
-            RefreshOptions();
-        }, 30);
-        mPierceButton = UiKit.CreatePlateButton(col, "", size, () =>
-        {
-            AppSettings.EnablePierce = !AppSettings.EnablePierce;
-            RefreshOptions();
-        }, 30);
-        mPierceOwnButton = UiKit.CreatePlateButton(col, "", size, () =>
-        {
-            AppSettings.PierceThroughOwnPieces = !AppSettings.PierceThroughOwnPieces;
-            RefreshOptions();
-        }, 30);
-
-        Label(col, "Звук и музыка");
-        var row = UiKit.CreateRow("Audio", col, 30);
-        mSoundButtons.Add(UiKit.CreateImageButton(row, "sound", 90, ToggleSound));
-        mMusicButtons.Add(UiKit.CreateImageButton(row, "music", 90, ToggleMusic));
-
-        BottomBar(root, CloseOptions, "save", CloseOptions);
-        return root.gameObject;
-    }
-
     private GameObject BuildPause()
     {
         var root = ScreenRoot("Pause", new Color(0.05f, 0.06f, 0.05f, 0.88f));
@@ -679,15 +639,6 @@ public class MenuManager : MonoBehaviour
             hint.text = mode == 0
                 ? "Шахматы с деградацией. После мата король уходит, а 1–3 фигуры его армии загораются и получают силу.\nАрмия без короля побеждает матом второму королю и проигрывает, когда фигур не осталось."
                 : "Все способности у всех фигур сразу. Король слабеет как все, шаха нет.\nПобеда — когда у соперника не осталось ни одной фигуры.";
-    }
-
-    private void RefreshOptions()
-    {
-        mQueenKnightButton.SetText("Ферзь ходит и как конь: " + YesNo(AppSettings.QueenMovesAsKnight));
-        mPierceButton.SetText("Пробивание слоном и ладьёй: " + YesNo(AppSettings.EnablePierce));
-        mPierceOwnButton.SetText("Пробивать сквозь свои фигуры: " + YesNo(AppSettings.PierceThroughOwnPieces));
-        mTrojanButton.SetText("Троянский конь: " + YesNo(AppSettings.TrojanKnight));
-        RefreshAudioIcons();
     }
 
     private void ToggleSound()
