@@ -19,7 +19,8 @@ namespace Chess2.Core
         NoProgress,        // долго не было ударов и ходов пешек
         OnlyGhosts,        // на доске одни призраки — никто никого не может срубить
         Resignation,
-        Timeout
+        Timeout,
+        Disconnected       // соперник по сети отключился
     }
 
     /// <summary>

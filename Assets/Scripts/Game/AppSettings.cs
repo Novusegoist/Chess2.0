@@ -38,6 +38,13 @@ public static class AppSettings
         set => PlayerPrefs.SetInt(Prefix + "time", value);
     }
 
+    /// <summary>Последний адрес, к которому подключались по IP.</summary>
+    public static string LastAddress
+    {
+        get => PlayerPrefs.GetString(Prefix + "lastAddress", "127.0.0.1");
+        set => PlayerPrefs.SetString(Prefix + "lastAddress", value);
+    }
+
     /// <summary>Варианты времени, которые предлагает меню.</summary>
     public static readonly int[] TimeOptions = { 0, 10, 15, 20 };
 

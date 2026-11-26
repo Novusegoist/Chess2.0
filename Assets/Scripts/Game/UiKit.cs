@@ -136,6 +136,39 @@ public static class UiKit
         return rt;
     }
 
+    /// <summary>Поле ввода текста (например, IP-адреса).</summary>
+    public static InputField CreateInputField(Transform parent, Vector2 size, string placeholder, int fontSize = 32)
+    {
+        var rt = CreateUi("Input", parent, typeof(Image), typeof(InputField));
+        rt.sizeDelta = size;
+        var back = rt.GetComponent<Image>();
+        back.color = new Color32(235, 238, 230, 255);
+        rt.gameObject.AddComponent<Outline>().effectColor = TextDark;
+
+        Text MakeText(string name, string value, Color color, FontStyle style)
+        {
+            var t = CreateText(name, rt, value, fontSize, color, TextAnchor.MiddleLeft, shadow: false);
+            var trt = (RectTransform)t.transform;
+            Stretch(trt);
+            trt.offsetMin = new Vector2(18, 4);
+            trt.offsetMax = new Vector2(-18, -4);
+            t.horizontalOverflow = HorizontalWrapMode.Wrap;
+            t.fontStyle = style;
+            return t;
+        }
+
+        var placeholderText = MakeText("Placeholder", placeholder, new Color(0.45f, 0.48f, 0.45f, 1f), FontStyle.Italic);
+        var text = MakeText("Text", "", TextDark, FontStyle.Normal);
+        text.supportRichText = false;
+
+        var field = rt.GetComponent<InputField>();
+        field.textComponent = text;
+        field.placeholder = placeholderText;
+        field.targetGraphic = back;
+        field.lineType = InputField.LineType.SingleLine;
+        return field;
+    }
+
     /// <summary>Кнопка-картинка из набора (текст уже нарисован на ней).</summary>
     public static MenuButton CreateImageButton(Transform parent, string sprite, float height, Action onClick)
     {

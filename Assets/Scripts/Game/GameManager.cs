@@ -3,12 +3,13 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Chess2.Core;
+using Chess2.Core.Net;
 using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
 /// Связывает ядро правил (Chess2.Core) с картинкой и ботом.
-/// Ходы игрока, бота (и в будущем сети) проходят через ApplyMove.
+/// Ходы игрока, бота и соперника по сети проходят через ApplyMove.
 /// Партии запускает меню (MenuManager) через StartGame.
 /// Доска, фигуры и надпись строятся из кода — сцену настраивать не нужно.
 /// </summary>
@@ -41,6 +42,19 @@ public class GameManager : MonoBehaviour
 
     public bool IsBotTurn => PlayVsBot && State != null && !State.IsOver && State.SideToMove == BotSide;
 
+    /// <summary>Сетевая партия (null — игра на этом компьютере).</summary>
+    public NetMatch Net { get; private set; }
+
+    /// <summary>За кого играет этот компьютер в сетевой партии.</summary>
+    public Side LocalSide => Net != null && Net.InGame ? Net.LocalSide : Side.White;
+
+    public bool IsRemoteTurn => Net != null && State != null && !State.IsOver && State.SideToMove != LocalSide;
+
+    /// <summary>Сетевые события для меню: соперник хочет реванш / началась новая партия / соединение закрыто.</summary>
+    public event Action RematchOffered;
+    public event Action NetGameStarted;
+    public event Action<string> NetClosed;
+
     private GameObject mRoot;
     private MenuButton mExplodeButton;
     private Text mBannerText;
@@ -68,6 +82,7 @@ public class GameManager : MonoBehaviour
 
     void Update()
     {
+        PollNet();
         TickClock();
         PollBot();
         UpdateClockUi();
@@ -76,6 +91,7 @@ public class GameManager : MonoBehaviour
     void OnDestroy()
     {
         CancelBot();
+        Net?.Close();
     }
 
     #region Партия
@@ -84,6 +100,11 @@ public class GameManager : MonoBehaviour
     public void StartGame(bool vsBot, Side botSide, BotDifficulty difficulty, RuleSet rules, int timeMinutes = 0)
     {
         EnsureBuilt();
+        if (Net != null)
+        {
+            Net.Close();
+            Net = null;
+        }
         TimeMinutes = timeMinutes;
         PlayVsBot = vsBot;
         BotSide = botSide;
@@ -97,9 +118,47 @@ public class GameManager : MonoBehaviour
     /// <summary>Та же партия заново (с теми же настройками).</summary>
     public void Restart() => StartGame(PlayVsBot, BotSide, BotDifficulty, Rules, TimeMinutes);
 
-    /// <summary>Убрать доску (выход в главное меню).</summary>
+    /// <summary>
+    /// Начать сетевую партию по настройкам, которые прислал хост (или выбрал сам хост).
+    /// GameManager забирает соединение себе и дальше сам обрабатывает его события.
+    /// </summary>
+    public void StartNetGame(NetMatch net)
+    {
+        EnsureBuilt();
+        Net = net;
+        NetSetup setup = net.Setup;
+        TimeMinutes = setup.TimeMinutes;
+        PlayVsBot = false;
+        Rules = setup.BuildRules();
+        Paused = false;
+        SetVisible(true);
+        NewGame();
+        NetGameStarted?.Invoke();
+    }
+
+    /// <summary>Сдаться. В сетевой игре соперник узнает об этом сразу.</summary>
+    public void Resign()
+    {
+        if (State == null || State.IsOver)
+            return;
+        Side loser = Net != null ? LocalSide
+            : PlayVsBot ? BotSide.Opponent()
+            : State.SideToMove;
+        Net?.SendResign();
+        FinishGame(loser, EndReason.Resignation);
+    }
+
+    /// <summary>Реванш в сетевой игре (новую партию начнёт хост, когда согласятся оба).</summary>
+    public void RequestRematch() => Net?.RequestRematch();
+
+    /// <summary>Убрать доску (выход в главное меню). Сетевое соединение закрывается.</summary>
     public void StopGame()
     {
+        if (Net != null)
+        {
+            Net.Close();
+            Net = null;
+        }
         CancelBot();
         Deselect();
         State = null;
@@ -115,11 +174,12 @@ public class GameManager : MonoBehaviour
     private void NewGame()
     {
         CancelBot();
-        State = GameState.CreateStandard(Rules);
+        // В сетевой игре зерно общее — загорятся одни и те же фигуры у обоих.
+        State = GameState.CreateStandard(Rules, Net != null ? Net.Setup.Seed : (int?)null);
         Clock = new ChessClock(TimeMinutes);
 
         // Человек всегда снизу.
-        mBoard.SetFlipped(PlayVsBot && BotSide == Side.White);
+        mBoard.SetFlipped(Net != null ? LocalSide == Side.Black : PlayVsBot && BotSide == Side.White);
 
         Deselect();
         mBoard.SetLastMove(null);
@@ -138,9 +198,14 @@ public class GameManager : MonoBehaviour
         if (State == null)
             return false;
 
+        Side mover = State.SideToMove;
         mEffects.Clear();
         if (!Chess2.Core.Rules.TryMakeMove(State, move, mEffects))
             return false;
+
+        // Свой ход в сетевой игре — сразу сопернику, вместе с нашим временем на часах.
+        if (Net != null && mover == LocalSide)
+            Net.SendMove(State.LastMove ?? move, Clock.Remaining(mover));
 
         Clock.OnMoveMade();
         if (State.IsOver)
@@ -173,15 +238,30 @@ public class GameManager : MonoBehaviour
 
     private void TickClock()
     {
-        if (State == null || State.IsOver || Paused || !Clock.Enabled)
+        // В сетевой игре пауза ничего не останавливает — соперник-то играет.
+        if (State == null || State.IsOver || (Paused && Net == null) || !Clock.Enabled)
             return;
 
         Side toMove = State.SideToMove;
         if (!Clock.Tick(toMove, Time.unscaledDeltaTime))
             return;
 
-        // Флаг упал: у того, чей ход, кончилось время.
-        Chess2.Core.Rules.EndGame(State, toMove, EndReason.Timeout);
+        // В сети флаг объявляет только тот, у кого кончилось время, — иначе из-за задержки
+        // сети часы у двух игроков могли бы разойтись. Чужой флаг ждём сообщением TIMEOUT.
+        if (Net != null && toMove != LocalSide)
+            return;
+
+        Net?.SendTimeout();
+        FinishGame(toMove, EndReason.Timeout);
+    }
+
+    /// <summary>Закончить партию не ходом (время, сдача, отключение).</summary>
+    private void FinishGame(Side loser, EndReason reason)
+    {
+        if (State == null || State.IsOver)
+            return;
+        Chess2.Core.Rules.EndGame(State, loser, reason);
+        Clock.Stop();
         CancelBot();
         Deselect();
         UpdateStatus();
@@ -210,9 +290,79 @@ public class GameManager : MonoBehaviour
     private string SideName(Side side)
     {
         string color = side == Side.White ? "Белые" : "Чёрные";
+        if (Net != null)
+            return side == LocalSide ? $"Ты · {color.ToLowerInvariant()}" : $"Соперник · {color.ToLowerInvariant()}";
         if (!PlayVsBot)
             return color;
         return side == BotSide ? $"Бот · {color.ToLowerInvariant()}" : $"Ты · {color.ToLowerInvariant()}";
+    }
+
+    #endregion
+
+    #region Сеть
+
+    private void PollNet()
+    {
+        if (Net == null)
+            return;
+
+        foreach (NetEvent e in Net.Poll())
+        {
+            switch (e.Kind)
+            {
+                case NetEventKind.RemoteMove:
+                {
+                    if (State == null || State.IsOver || !IsRemoteTurn)
+                        break;
+                    Side mover = State.SideToMove;
+                    if (ApplyMove(e.Move))
+                        Clock.SetRemaining(mover, e.ClockSeconds);
+                    else
+                    {
+                        // Такого быть не должно: у соперника другая позиция.
+                        Debug.LogError("Соперник прислал невозможный ход: " + e.Move);
+                        CloseNet("Позиции разошлись — партия остановлена");
+                    }
+                    break;
+                }
+
+                case NetEventKind.RemoteResigned:
+                    if (State != null)
+                        FinishGame(LocalSide.Opponent(), EndReason.Resignation);
+                    break;
+
+                case NetEventKind.RemoteTimeout:
+                    if (State != null)
+                    {
+                        Clock.SetRemaining(LocalSide.Opponent(), 0);
+                        FinishGame(LocalSide.Opponent(), EndReason.Timeout);
+                    }
+                    break;
+
+                case NetEventKind.RematchRequested:
+                    RematchOffered?.Invoke();
+                    break;
+
+                case NetEventKind.GameStarted:
+                    StartNetGame(Net); // реванш
+                    break;
+
+                case NetEventKind.Disconnected:
+                    CloseNet(string.IsNullOrEmpty(e.Text) ? "Соперник отключился" : e.Text);
+                    return;
+            }
+        }
+    }
+
+    private void CloseNet(string reason)
+    {
+        if (State != null && !State.IsOver)
+        {
+            ShowBanner(reason);
+            FinishGame(LocalSide.Opponent(), EndReason.Disconnected);
+        }
+        Net?.Close();
+        NetClosed?.Invoke(reason);
     }
 
     #endregion
@@ -290,7 +440,7 @@ public class GameManager : MonoBehaviour
 
     public bool CanPickUp(int sq)
     {
-        if (State == null || State.IsOver || IsBotTurn || Paused)
+        if (State == null || State.IsOver || IsBotTurn || IsRemoteTurn || Paused)
             return false;
         Piece p = State.Cells[sq];
         return !p.IsEmpty && p.Side == State.SideToMove;
@@ -298,7 +448,7 @@ public class GameManager : MonoBehaviour
 
     public void OnSquareClicked(int sq)
     {
-        if (State == null || IsBotTurn || Paused)
+        if (State == null || IsBotTurn || IsRemoteTurn || Paused)
             return;
 
         // Сначала пробуем походить выбранной фигурой.
@@ -414,7 +564,9 @@ public class GameManager : MonoBehaviour
         string text;
         if (IsBotTurn)
             text = $"Бот ({DifficultyText(BotDifficulty)}) думает…";
-        else if (PlayVsBot)
+        else if (IsRemoteTurn)
+            text = "Ход соперника…";
+        else if (PlayVsBot || Net != null)
             text = "Твой ход";
         else
             text = "Ход " + (State.SideToMove == Side.White ? "белых" : "чёрных");
@@ -467,7 +619,9 @@ public class GameManager : MonoBehaviour
                 lit.Add(AbilityText(e.OldType));
         }
 
-        string who = PlayVsBot
+        string who = Net != null
+            ? (side == LocalSide ? "Твой король пал!" : "Король соперника пал!")
+            : PlayVsBot
             ? (side == BotSide ? "Король бота пал!" : "Твой король пал!")
             : (side == Side.White ? "Белый король пал!" : "Чёрный король пал!");
         string fire = lit.Count == 0
@@ -496,6 +650,8 @@ public class GameManager : MonoBehaviour
             return $"Ничья: {reason}";
 
         Side winner = s.Result == GameResult.WhiteWins ? Side.White : Side.Black;
+        if (Net != null)
+            return (winner == LocalSide ? "Ты победил" : "Соперник победил") + $": {reason}";
         if (PlayVsBot)
             return (winner == BotSide ? "Бот победил" : "Ты победил") + $": {reason}";
         return (winner == Side.White ? "Белые победили" : "Чёрные победили") + $": {reason}";
@@ -523,6 +679,7 @@ public class GameManager : MonoBehaviour
             case EndReason.OnlyGhosts: return "остались одни призраки";
             case EndReason.Resignation: return "сдача";
             case EndReason.Timeout: return "время вышло";
+            case EndReason.Disconnected: return "соперник отключился";
             default: return reason.ToString();
         }
     }

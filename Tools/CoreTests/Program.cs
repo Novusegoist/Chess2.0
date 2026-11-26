@@ -52,6 +52,9 @@ internal static class Program
         Run("Часы: стартуют после первого хода, тикают у того, чей ход", ClockBasics);
         Run("Часы: флаг падает ровно на нуле, без контроля времени не тикают", ClockFlag);
         Run("Часы: формат времени", ClockFormat);
+        Run("Сеть: хост и гость через localhost играют одну и ту же партию", NetFullGame);
+        Run("Сеть: сдача, реванш со сменой цветов, отключение", NetResignRematchDisconnect);
+        Run("Сеть: подключение к закрытому порту сообщает об ошибке", NetConnectFails);
         Run("Бот: мат в 1 ход", BotMateInOne);
         Run("Бот: добивает последнюю фигуру соперника", BotFinishes);
         Run("Бот: бьёт незащищённого ферзя", BotHitsQueen);
@@ -755,6 +758,138 @@ internal static class Program
         Eq("0:10", ChessClock.Format(10), "ровно 10 секунд");
         Eq("0:09.9", ChessClock.Format(9.95), "десятые");
         Eq("0:00.0", ChessClock.Format(-1), "ноль");
+    }
+
+    // ---------- сеть ----------
+
+    /// <summary>Крутит Poll у обоих, пока не выполнится условие (или 5 секунд).</summary>
+    private static bool Pump(Chess2.Core.Net.NetMatch a, List<Chess2.Core.Net.NetEvent> aEvents,
+                             Chess2.Core.Net.NetMatch b, List<Chess2.Core.Net.NetEvent> bEvents, Func<bool> done)
+    {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        while (sw.ElapsedMilliseconds < 5000)
+        {
+            aEvents.AddRange(a.Poll());
+            bEvents.AddRange(b.Poll());
+            if (done())
+                return true;
+            System.Threading.Thread.Sleep(5);
+        }
+        return false;
+    }
+
+    private static (Chess2.Core.Net.NetMatch host, Chess2.Core.Net.NetMatch guest,
+        List<Chess2.Core.Net.NetEvent> he, List<Chess2.Core.Net.NetEvent> ge) NetPair(int hostColor = 0)
+    {
+        var template = new Chess2.Core.Net.NetSetup { HostColorChoice = hostColor, Mode = 0, TimeMinutes = 10 };
+        var host = Chess2.Core.Net.NetMatch.Host(0, template);
+        var guest = Chess2.Core.Net.NetMatch.Join("127.0.0.1", host.Transport.ListenPort);
+        var he = new List<Chess2.Core.Net.NetEvent>();
+        var ge = new List<Chess2.Core.Net.NetEvent>();
+        bool ok = Pump(host, he, guest, ge, () =>
+            he.Any(e => e.Kind == Chess2.Core.Net.NetEventKind.GameStarted) &&
+            ge.Any(e => e.Kind == Chess2.Core.Net.NetEventKind.GameStarted));
+        True(ok, "обе стороны получили начало партии");
+        return (host, guest, he, ge);
+    }
+
+    private static void NetFullGame()
+    {
+        var (host, guest, he, ge) = NetPair(hostColor: 1);
+        try
+        {
+            Eq(host.Setup.Seed, guest.Setup.Seed, "одинаковое зерно");
+            Eq(Side.Black, host.LocalSide, "хост за чёрных, как выбрал");
+            Eq(Side.White, guest.LocalSide, "гость за белых");
+            Eq(10, guest.Setup.TimeMinutes, "время пришло гостю");
+
+            var hs = GameState.CreateStandard(host.Setup.BuildRules(), host.Setup.Seed);
+            var gs = GameState.CreateStandard(guest.Setup.BuildRules(), guest.Setup.Seed);
+            var rnd = new Random(11);
+            he.Clear();
+            ge.Clear();
+
+            for (int ply = 0; ply < 80 && !hs.IsOver; ply++)
+            {
+                bool hostMoves = hs.SideToMove == host.LocalSide;
+                var (me, meState, other, otherState, otherEvents, meEvents) = hostMoves
+                    ? (host, hs, guest, gs, ge, he)
+                    : (guest, gs, host, hs, he, ge);
+
+                var legal = Rules.GetLegalMoves(meState);
+                var move = legal[rnd.Next(legal.Count)];
+                True(Rules.TryMakeMove(meState, move), "свой ход");
+                me.SendMove(move, 500 - ply);
+
+                int before = otherEvents.Count;
+                True(Pump(me, meEvents, other, otherEvents, () => otherEvents.Count > before), "ход дошёл, ply " + ply);
+                var ev = otherEvents[otherEvents.Count - 1];
+                Eq(Chess2.Core.Net.NetEventKind.RemoteMove, ev.Kind, "это ход");
+                Eq(500.0 - ply, ev.ClockSeconds, "время соперника");
+                True(Rules.TryMakeMove(otherState, ev.Move), $"ход {move} принят у соперника");
+            }
+            Eq(Snapshot(hs), Snapshot(gs), "позиции у обоих совпадают");
+        }
+        finally
+        {
+            host.Close();
+            guest.Close();
+        }
+    }
+
+    private static void NetResignRematchDisconnect()
+    {
+        var (host, guest, he, ge) = NetPair(hostColor: 0);
+        try
+        {
+            Side hostSide = host.LocalSide;
+            he.Clear();
+            ge.Clear();
+
+            host.SendResign();
+            True(Pump(host, he, guest, ge, () => ge.Any(e => e.Kind == Chess2.Core.Net.NetEventKind.RemoteResigned)), "гость узнал о сдаче");
+
+            guest.RequestRematch();
+            True(Pump(host, he, guest, ge, () => he.Any(e => e.Kind == Chess2.Core.Net.NetEventKind.RematchRequested)), "хост видит просьбу о реванше");
+            True(host.RemoteWantsRematch, "флаг реванша");
+
+            host.RequestRematch();
+            True(Pump(host, he, guest, ge, () =>
+                he.Any(e => e.Kind == Chess2.Core.Net.NetEventKind.GameStarted) &&
+                ge.Any(e => e.Kind == Chess2.Core.Net.NetEventKind.GameStarted)), "реванш начался у обоих");
+            Eq(hostSide.Opponent(), host.LocalSide, "хост сменил цвет");
+            Eq(hostSide, guest.LocalSide, "гость сменил цвет");
+            Eq(host.Setup.Seed, guest.Setup.Seed, "новое общее зерно");
+
+            guest.Close();
+            True(Pump(host, he, guest, ge, () => he.Any(e => e.Kind == Chess2.Core.Net.NetEventKind.Disconnected)), "хост узнал об отключении");
+        }
+        finally
+        {
+            host.Close();
+            guest.Close();
+        }
+    }
+
+    private static void NetConnectFails()
+    {
+        // Берём свободный порт и сразу закрываем — подключаться некуда.
+        var probe = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+        probe.Start();
+        int port = ((System.Net.IPEndPoint)probe.LocalEndpoint).Port;
+        probe.Stop();
+
+        var guest = Chess2.Core.Net.NetMatch.Join("127.0.0.1", port);
+        var events = new List<Chess2.Core.Net.NetEvent>();
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        while (sw.ElapsedMilliseconds < 5000 && events.Count == 0)
+        {
+            events.AddRange(guest.Poll());
+            System.Threading.Thread.Sleep(10);
+        }
+        True(events.Any(e => e.Kind == Chess2.Core.Net.NetEventKind.Disconnected), "событие отключения");
+        True(!string.IsNullOrEmpty(guest.Transport.Error), "есть текст ошибки: " + guest.Transport.Error);
+        guest.Close();
     }
 
     private static string Snapshot(GameState s)

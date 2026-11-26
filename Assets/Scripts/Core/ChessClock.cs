@@ -34,6 +34,21 @@ namespace Chess2.Core
                 Running = true;
         }
 
+        /// <summary>
+        /// Выставить время стороны (сетевая игра: соперник присылает своё точное время вместе с ходом,
+        /// чтобы часы у обоих игроков не расходились из-за задержки сети).
+        /// </summary>
+        public void SetRemaining(Side side, double seconds)
+        {
+            if (!Enabled)
+                return;
+            seconds = Math.Max(0, Math.Min(InitialSeconds, seconds));
+            if (side == Side.White)
+                WhiteSeconds = seconds;
+            else
+                BlackSeconds = seconds;
+        }
+
         /// <summary>Остановить часы насовсем (конец партии).</summary>
         public void Stop() => Running = false;
 
