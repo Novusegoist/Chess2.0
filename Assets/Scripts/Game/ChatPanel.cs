@@ -34,6 +34,8 @@ public class ChatPanel : MonoBehaviour
     private GameObject mPhrasesPopup;
     private GameObject mEmojiPopup;
     private RectTransform mFloatLayer;
+    private Text mTitle;
+    private string mTitleShown;
     private static Sprite[] sEmoji;
 
     public static Sprite Emoji(int id)
@@ -112,6 +114,28 @@ public class ChatPanel : MonoBehaviour
         StartCoroutine(FloatEmote(sprite, floatPosition));
     }
 
+    /// <summary>Состояние связи в заголовке: «Чат · 34 мс» или предупреждение.</summary>
+    public void SetConnection(bool connected, int? pingMs, bool shaky)
+    {
+        string text;
+        if (!connected)
+            text = "Чат · <color=#ff7a6b>нет связи</color>";
+        else if (shaky)
+            text = "Чат · <color=#ffb84d>связь нестабильна…</color>";
+        else if (pingMs.HasValue)
+        {
+            string color = pingMs < 100 ? "#7fdc8a" : pingMs < 250 ? "#ffd166" : "#ff9f6b";
+            text = $"Чат · <color={color}>{pingMs} мс</color>";
+        }
+        else
+            text = "Чат";
+
+        if (text == mTitleShown)
+            return;
+        mTitleShown = text;
+        mTitle.text = text;
+    }
+
     /// <summary>Системная строка серым («Соперник подключился» и т.п.).</summary>
     public void AddSystem(string text)
     {
@@ -128,6 +152,8 @@ public class ChatPanel : MonoBehaviour
     {
         var title = UiKit.CreateText("Title", root, "Чат", 28, UiKit.TextLight);
         title.fontStyle = FontStyle.Bold;
+        title.supportRichText = true;
+        mTitle = title;
         var trt = (RectTransform)title.transform;
         trt.anchorMin = new Vector2(0, 1);
         trt.anchorMax = new Vector2(1, 1);

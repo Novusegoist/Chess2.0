@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 
 namespace Chess2.Core.Net
@@ -107,13 +108,15 @@ namespace Chess2.Core.Net
     /// <summary>
     /// Сетевая партия один на один поверх TcpTransport.
     /// Протокол — текстовые строки: «HELLO версия», «SETUP …», «MOVE откуда куда вид время», «RESIGN»,
-    /// «TIMEOUT», «REMATCH», «CHAT текст», «EMOTE номер», «BYE». Каждая сторона сама проверяет чужие ходы по правилам.
+    /// «TIMEOUT», «REMATCH», «CHAT текст», «EMOTE номер», «PING n» / «PONG n», «BYE».
+    /// Каждая сторона сама проверяет чужие ходы по правилам.
+    /// Пульс: раз в PingInterval шлём PING; если от соперника долго ничего нет — связь потеряна.
     /// Все события забираются в основном потоке через Poll().
     /// </summary>
     public sealed class NetMatch : IDisposable
     {
-        /// <summary>2 — добавлены чат и эмодзи.</summary>
-        public const int ProtocolVersion = 2;
+        /// <summary>2 — чат и эмодзи; 3 — пульс соединения (PING/PONG).</summary>
+        public const int ProtocolVersion = 3;
 
         /// <summary>Максимальная длина сообщения в чате.</summary>
         public const int MaxChatLength = 120;
@@ -129,11 +132,36 @@ namespace Chess2.Core.Net
         public bool RemoteWantsRematch { get; private set; }
         public bool LocalWantsRematch { get; private set; }
 
+        /// <summary>Как часто слать PING (секунды).</summary>
+        public double PingInterval { get; set; } = 1.5;
+
+        /// <summary>Сколько секунд тишины — «связь нестабильна».</summary>
+        public double ShakyAfter { get; set; } = 4;
+
+        /// <summary>Сколько секунд тишины — связь потеряна, соединение закрывается.</summary>
+        public double LostAfter { get; set; } = 12;
+
+        /// <summary>Последний измеренный пинг (туда и обратно), мс. null — ещё не измерен.</summary>
+        public int? PingMs { get; private set; }
+
+        /// <summary>Сколько секунд от соперника ничего не приходило.</summary>
+        public double Silence => Transport.Status == TransportStatus.Connected ? Now - _lastReceived : 0;
+
+        /// <summary>Связь есть, но соперник давно молчит.</summary>
+        public bool Shaky => Transport.Status == TransportStatus.Connected && Silence > ShakyAfter;
+
         private readonly NetSetup _template;
         private readonly List<NetEvent> _pending = new List<NetEvent>();
         private readonly Random _random = new Random();
         private bool _helloSent;
         private bool _closedReported;
+        private readonly Stopwatch _clock = Stopwatch.StartNew();
+        private double _lastReceived;
+        private double _lastPingSent = double.MinValue;
+        private int _pingId;
+        private double _pingSentAt;
+
+        private double Now => _clock.Elapsed.TotalSeconds;
 
         private NetMatch(NetRole role, NetSetup template)
         {
@@ -166,11 +194,13 @@ namespace Chess2.Core.Net
             if (Transport.Status == TransportStatus.Connected && !_helloSent)
             {
                 _helloSent = true;
+                _lastReceived = Now; // отсчёт тишины — с момента подключения
                 Transport.Send("HELLO " + ProtocolVersion);
             }
 
             while (Transport.TryReceive(out string line))
             {
+                _lastReceived = Now;
                 try
                 {
                     Handle(line, events);
@@ -179,6 +209,22 @@ namespace Chess2.Core.Net
                 {
                     Disconnect("Непонятное сообщение от соперника: " + e.Message);
                 }
+            }
+
+            if (Transport.Status == TransportStatus.Connected)
+            {
+                double now = Now;
+                if (now - _lastPingSent >= PingInterval)
+                {
+                    _lastPingSent = now;
+                    _pingSentAt = now;
+                    _pingId++;
+                    Transport.Send("PING " + _pingId.ToString(CultureInfo.InvariantCulture));
+                }
+                if (now - _lastReceived > LostAfter)
+                    Disconnect("Связь с соперником потеряна");
+                events.AddRange(_pending);
+                _pending.Clear();
             }
 
             if (Transport.Status == TransportStatus.Closed && !_closedReported)
@@ -322,6 +368,15 @@ namespace Chess2.Core.Net
 
                 case "EMOTE":
                     events.Add(new NetEvent { Kind = NetEventKind.Emote, Value = int.Parse(a[1], CultureInfo.InvariantCulture) });
+                    break;
+
+                case "PING":
+                    Transport.Send("PONG " + a[1]);
+                    break;
+
+                case "PONG":
+                    if (int.Parse(a[1], CultureInfo.InvariantCulture) == _pingId)
+                        PingMs = (int)Math.Round((Now - _pingSentAt) * 1000);
                     break;
 
                 case "BYE":

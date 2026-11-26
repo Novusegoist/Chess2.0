@@ -73,6 +73,7 @@ public class GameManager : MonoBehaviour
     private ChatPanel mChat;
     private NetMatch mChatOpponent; // с кем сейчас переписка (новый соперник — чистая история)
     private float mLastChatSent = -10f;
+    private bool mWasShaky;
     private const float ChatCooldown = 0.5f;
 
     void Start()
@@ -90,6 +91,23 @@ public class GameManager : MonoBehaviour
         TickClock();
         PollBot();
         UpdateClockUi();
+        UpdateConnectionUi();
+    }
+
+    /// <summary>Пинг в заголовке чата и предупреждение в статусе, если соперник давно молчит.</summary>
+    private void UpdateConnectionUi()
+    {
+        if (Net == null)
+            return;
+        bool connected = Net.Transport.Status == Chess2.Core.Net.TransportStatus.Connected;
+        bool shaky = Net.Shaky;
+        if (mChat != null && mChat.gameObject.activeSelf)
+            mChat.SetConnection(connected, Net.PingMs, shaky);
+        if (shaky != mWasShaky)
+        {
+            mWasShaky = shaky;
+            UpdateStatus();
+        }
     }
 
     void OnDestroy()
@@ -640,6 +658,8 @@ public class GameManager : MonoBehaviour
             text += " (без короля)";
         if (checkRules && Chess2.Core.Rules.IsInCheck(State, State.SideToMove))
             text += " — ШАХ!";
+        if (Net != null && Net.Shaky)
+            text += "   · связь с соперником нестабильна…";
         return text;
     }
 

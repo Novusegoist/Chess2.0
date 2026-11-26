@@ -56,6 +56,7 @@ internal static class Program
         Run("Сеть: сдача, реванш со сменой цветов, отключение", NetResignRematchDisconnect);
         Run("Сеть: подключение к закрытому порту сообщает об ошибке", NetConnectFails);
         Run("Сеть: чат (кириллица, переносы, длина) и эмодзи", NetChat);
+        Run("Сеть: пульс — пинг измеряется, молчание соперника = потеря связи", NetHeartbeat);
         Run("Бот: мат в 1 ход", BotMateInOne);
         Run("Бот: добивает последнюю фигуру соперника", BotFinishes);
         Run("Бот: бьёт незащищённого ферзя", BotHitsQueen);
@@ -890,6 +891,40 @@ internal static class Program
 
             Eq(Chess2.Core.Net.NetMatch.MaxChatLength, Chess2.Core.Net.NetMatch.CleanChat(new string('а', 500)).Length, "длинное обрезано");
             Eq("", host.SendChat("   \n  "), "пустое не отправляется");
+        }
+        finally
+        {
+            host.Close();
+            guest.Close();
+        }
+    }
+
+    private static void NetHeartbeat()
+    {
+        var (host, guest, he, ge) = NetPair();
+        try
+        {
+            host.PingInterval = guest.PingInterval = 0.05;
+            True(Pump(host, he, guest, ge, () => host.PingMs.HasValue && guest.PingMs.HasValue), "пинг измерен у обоих");
+            True(host.PingMs.Value < 1000, "на localhost пинг маленький: " + host.PingMs + " мс");
+            True(!host.Shaky && !guest.Shaky, "связь стабильна");
+
+            // Гость «завис»: перестал отвечать (Poll не вызывается). Хост должен это заметить.
+            host.ShakyAfter = 0.3;
+            host.LostAfter = 0.8;
+            he.Clear();
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            bool sawShaky = false;
+            while (sw.ElapsedMilliseconds < 5000 && !he.Any(e => e.Kind == Chess2.Core.Net.NetEventKind.Disconnected))
+            {
+                he.AddRange(host.Poll());
+                sawShaky |= host.Shaky;
+                System.Threading.Thread.Sleep(20);
+            }
+            True(sawShaky, "сначала «связь нестабильна»");
+            var lost = he.FirstOrDefault(e => e.Kind == Chess2.Core.Net.NetEventKind.Disconnected);
+            Eq("Связь с соперником потеряна", lost.Text, "потом — потеря связи");
+            True(sw.ElapsedMilliseconds < 3000, "заметил быстро: " + sw.ElapsedMilliseconds + " мс");
         }
         finally
         {
