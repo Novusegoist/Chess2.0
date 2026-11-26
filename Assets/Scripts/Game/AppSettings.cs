@@ -122,7 +122,10 @@ public static class AppSettings
         set => PlayerPrefs.SetInt(Prefix + "fps", value);
     }
 
-    public static readonly int[] FpsOptions = { 30, 60, 120, 144, 0 };
+    public static int[] FpsOptions => Platform.IsMobile ? MobileFps : DesktopFps;
+
+    private static readonly int[] DesktopFps = { 30, 60, 120, 144, 0 };
+    private static readonly int[] MobileFps = { 30, 60, 120 }; // «без ограничения» на телефоне = 30 кадров
 
     /// <summary>Вертикальная синхронизация: кадры под частоту монитора, без разрывов картинки.</summary>
     public static bool VSync

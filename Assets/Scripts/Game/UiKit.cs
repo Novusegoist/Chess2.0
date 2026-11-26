@@ -109,6 +109,30 @@ public static class UiKit
         return img;
     }
 
+    /// <summary>
+    /// Контейнер в безопасной зоне экрана (не под вырезом камеры телефона), растянутый на весь холст.
+    /// </summary>
+    public static RectTransform CreateSafeRoot(Transform parent, string name = "Safe Area")
+    {
+        var rt = Stretch(CreateUi(name, parent, typeof(SafeArea)));
+        return rt;
+    }
+
+    /// <summary>
+    /// Экран меню: фон (цвет и картинка) на весь экран, ловит клики, чтобы они не проходили к доске;
+    /// содержимое — в безопасной зоне. Возвращает контейнер для содержимого.
+    /// </summary>
+    public static RectTransform CreateScreen(string name, Transform parent, Color color, string backdrop = null)
+    {
+        RectTransform root = CreateSafeRoot(parent, name);
+        Image bleed = CreatePanel("Background", root, color);
+        bleed.raycastTarget = true;
+        if (backdrop != null)
+            CreateBackdrop(bleed.transform, backdrop);
+        root.GetComponent<SafeArea>().Bleed = bleed.rectTransform;
+        return root;
+    }
+
     public static Image CreatePanel(string name, Transform parent, Color color)
     {
         var rt = Stretch(CreateUi(name, parent, typeof(Image)));

@@ -23,10 +23,7 @@ public class OptionsScreen
     public GameObject Build(Transform canvas, Action close, Action<Transform, string, int, Vector2> title,
         Action<Transform, Action, string, Action> bottomBar)
     {
-        var rootImage = UiKit.CreatePanel("Options", canvas, UiKit.Background);
-        rootImage.raycastTarget = true;
-        UiKit.CreateBackdrop(rootImage.transform, "bg_menu");
-        var root = (RectTransform)rootImage.transform;
+        var root = UiKit.CreateScreen("Options", canvas, UiKit.Background, "bg_menu");
         Root = root.gameObject;
 
         title(root, "Опции", 64, new Vector2(0, -50));
@@ -90,6 +87,57 @@ public class OptionsScreen
     {
         var col = Panel(root, "Graphics");
 
+        // На телефоне игра всегда во весь экран: режим экрана, разрешение и VSync не нужны.
+        if (Platform.IsDesktop)
+            BuildScreenRows(col);
+
+        var fps = UiKit.CreateSelector(UiKit.CreateSettingRow(col, "Кадров в секунду"), d =>
+        {
+            int[] opts = AppSettings.FpsOptions;
+            int i = Array.IndexOf(opts, AppSettings.FpsLimit);
+            i = Mathf.Clamp((i < 0 ? 1 : i) + d, 0, opts.Length - 1);
+            AppSettings.FpsLimit = opts[i];
+            AppPerformance.ApplyFrameRate();
+            Refresh();
+        });
+        mRefreshers.Add(() => fps.text = AppSettings.VSync && Platform.IsDesktop
+            ? "как у монитора (VSync)"
+            : AppSettings.FpsLimit > 0 ? AppSettings.FpsLimit.ToString() : "без ограничения");
+
+        if (Platform.IsDesktop)
+        {
+            var vsync = UiKit.CreateSelector(UiKit.CreateSettingRow(col, "Вертикальная синхронизация"), d =>
+            {
+                AppSettings.VSync = !AppSettings.VSync;
+                AppPerformance.ApplyFrameRate();
+                Refresh();
+            });
+            mRefreshers.Add(() => vsync.text = AppSettings.VSync ? "Вкл" : "Выкл");
+        }
+
+        Text brightnessValue = null;
+        var brightness = UiKit.CreateSlider(UiKit.CreateSettingRow(col, "Яркость"), 0.5f, 1.5f, v =>
+        {
+            AppSettings.Brightness = v;
+            AppPerformance.ApplyBrightness();
+            brightnessValue.text = Percent(v);
+        }, out brightnessValue);
+        mRefreshers.Add(() =>
+        {
+            brightness.SetValueWithoutNotify(AppSettings.Brightness);
+            brightnessValue.text = Percent(AppSettings.Brightness);
+        });
+
+        if (Platform.IsDesktop)
+            Note(col, "F11 — окно ⇄ полный экран. Окно можно тянуть мышкой за край.\nРежим экрана и разрешение работают только в собранной игре, не в редакторе.");
+        else
+            Note(col, "Меньше кадров в секунду — телефон меньше греется и дольше работает от батареи.");
+        return col.gameObject;
+    }
+
+    /// <summary>Строки «Экран» и «Разрешение / Размер окна» — только на ПК.</summary>
+    private void BuildScreenRows(Transform col)
+    {
         var screen = UiKit.CreateSelector(UiKit.CreateSettingRow(col, "Экран"), d =>
         {
             AppSettings.Fullscreen = !AppSettings.Fullscreen;
@@ -120,43 +168,6 @@ public class OptionsScreen
             Vector2Int r = list[CurrentResolutionIndex(list)];
             res.text = $"{r.x} × {r.y}";
         });
-
-        var fps = UiKit.CreateSelector(UiKit.CreateSettingRow(col, "Кадров в секунду"), d =>
-        {
-            int[] opts = AppSettings.FpsOptions;
-            int i = Array.IndexOf(opts, AppSettings.FpsLimit);
-            i = Mathf.Clamp((i < 0 ? 1 : i) + d, 0, opts.Length - 1);
-            AppSettings.FpsLimit = opts[i];
-            AppPerformance.ApplyFrameRate();
-            Refresh();
-        });
-        mRefreshers.Add(() => fps.text = AppSettings.VSync
-            ? "как у монитора (VSync)"
-            : AppSettings.FpsLimit > 0 ? AppSettings.FpsLimit.ToString() : "без ограничения");
-
-        var vsync = UiKit.CreateSelector(UiKit.CreateSettingRow(col, "Вертикальная синхронизация"), d =>
-        {
-            AppSettings.VSync = !AppSettings.VSync;
-            AppPerformance.ApplyFrameRate();
-            Refresh();
-        });
-        mRefreshers.Add(() => vsync.text = AppSettings.VSync ? "Вкл" : "Выкл");
-
-        Text brightnessValue = null;
-        var brightness = UiKit.CreateSlider(UiKit.CreateSettingRow(col, "Яркость"), 0.5f, 1.5f, v =>
-        {
-            AppSettings.Brightness = v;
-            AppPerformance.ApplyBrightness();
-            brightnessValue.text = Percent(v);
-        }, out brightnessValue);
-        mRefreshers.Add(() =>
-        {
-            brightness.SetValueWithoutNotify(AppSettings.Brightness);
-            brightnessValue.text = Percent(AppSettings.Brightness);
-        });
-
-        Note(col, "F11 — окно ⇄ полный экран. Окно можно тянуть мышкой за край.\nРежим экрана и разрешение работают только в собранной игре, не в редакторе.");
-        return col.gameObject;
     }
 
     /// <summary>
@@ -217,7 +228,9 @@ public class OptionsScreen
         AddToggle(col, "Звуки", () => AppSettings.Sound, v => AppSettings.Sound = v, "Вкл", "Выкл");
         AddToggle(col, "Музыка", () => AppSettings.Music, v => AppSettings.Music = v, "Вкл", "Выкл");
 
-        Note(col, "Звуки — Kenney (kenney.nl). Музыка — joth, omfgdude, cynicmusic (OpenGameArt). Всё под CC0.");
+        // Авторство сторонних материалов (лицензия CC BY-SA эмодзи требует указать его в игре).
+        Note(col, "Звуки — Kenney (kenney.nl). Музыка — joth, omfgdude, cynicmusic (OpenGameArt). Всё под CC0.\n"
+                  + "Эмодзи в чате — OpenMoji (openmoji.org), лицензия CC BY-SA 4.0.");
         return col.gameObject;
     }
 

@@ -28,9 +28,53 @@ public static class ProjectSetup
         if (!PlayerSettings.allowFullscreenSwitch)
             PlayerSettings.allowFullscreenSwitch = true;
 
+        ApplyMobile();
+
         // Иконку ставим, когда ассеты уже импортированы.
         EditorApplication.delayCall += ApplyIcon;
         EditorApplication.delayCall += ApplyCursor;
+    }
+
+    /// <summary>Временный идентификатор приложения. Перед публикацией замени на свой (например, com.твоёимя.ashandcrown).</summary>
+    public const string BundleId = "com.ashandcrown.game";
+
+    /// <summary>
+    /// Телефоны (Google Play и App Store): только альбомная ориентация, IL2CPP и ARM64 (так требует Google Play),
+    /// сборка в .aab, разрешение на интернет (игра по сети).
+    /// </summary>
+    private static void ApplyMobile()
+    {
+        // Доска и панели по бокам рассчитаны на горизонтальный экран.
+        if (PlayerSettings.defaultInterfaceOrientation != UIOrientation.AutoRotation)
+            PlayerSettings.defaultInterfaceOrientation = UIOrientation.AutoRotation;
+        if (PlayerSettings.allowedAutorotateToPortrait)
+            PlayerSettings.allowedAutorotateToPortrait = false;
+        if (PlayerSettings.allowedAutorotateToPortraitUpsideDown)
+            PlayerSettings.allowedAutorotateToPortraitUpsideDown = false;
+        if (!PlayerSettings.allowedAutorotateToLandscapeLeft)
+            PlayerSettings.allowedAutorotateToLandscapeLeft = true;
+        if (!PlayerSettings.allowedAutorotateToLandscapeRight)
+            PlayerSettings.allowedAutorotateToLandscapeRight = true;
+
+        foreach (NamedBuildTarget target in new[] { NamedBuildTarget.Android, NamedBuildTarget.iOS })
+        {
+            string id = PlayerSettings.GetApplicationIdentifier(target);
+            if (string.IsNullOrEmpty(id) || id.Contains("DefaultCompany"))
+                PlayerSettings.SetApplicationIdentifier(target, BundleId);
+        }
+
+        if (PlayerSettings.GetScriptingBackend(NamedBuildTarget.Android) != ScriptingImplementation.IL2CPP)
+            PlayerSettings.SetScriptingBackend(NamedBuildTarget.Android, ScriptingImplementation.IL2CPP);
+        if (PlayerSettings.Android.targetArchitectures != AndroidArchitecture.ARM64)
+            PlayerSettings.Android.targetArchitectures = AndroidArchitecture.ARM64;
+        if (!PlayerSettings.Android.forceInternetPermission)
+            PlayerSettings.Android.forceInternetPermission = true;
+        if (!EditorUserBuildSettings.buildAppBundle)
+            EditorUserBuildSettings.buildAppBundle = true; // Google Play принимает только .aab
+
+        // На iPad приложение с одной ориентацией должно занимать весь экран.
+        if (!PlayerSettings.iOS.requiresFullScreen)
+            PlayerSettings.iOS.requiresFullScreen = true;
     }
 
     /// <summary>Курсор по умолчанию в сборке — сразу при запуске, ещё до загрузки сцены.</summary>

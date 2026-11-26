@@ -198,10 +198,14 @@ public class ChatPanel : MonoBehaviour
         // Enter — отправить и оставить фокус, чтобы писать дальше (уход фокуса кликом — не отправка).
         mInput.onEndEdit.AddListener(_ =>
         {
-            if (!EnterPressed())
+            // На телефоне — кнопка «Готово» экранной клавиатуры.
+            bool done = mInput.touchScreenKeyboard != null
+                        && mInput.touchScreenKeyboard.status == TouchScreenKeyboard.Status.Done;
+            if (!EnterPressed() && !done)
                 return;
             Submit();
-            mInput.ActivateInputField();
+            if (!done)
+                mInput.ActivateInputField();
         });
 
         var send = UiKit.CreatePlateButton(root, "»", new Vector2(80, 52), Submit, 36);

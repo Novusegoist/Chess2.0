@@ -103,7 +103,7 @@ public class MenuManager : MonoBehaviour
         {
             steam.InviteAccepted += JoinSteamLobby;
             // Игру запустили из приглашения друга в Steam.
-            if (steam.TryTakePendingInvite(out Steamworks.CSteamID lobby))
+            if (steam.TryTakePendingInvite(out ulong lobby))
                 JoinSteamLobby(lobby);
         }
     }
@@ -373,7 +373,7 @@ public class MenuManager : MonoBehaviour
     {
         AppSettings.Save();
         mPendingNet?.Close();
-        SteamLobbyTransport transport = SteamService.Instance.HostLobby();
+        INetTransport transport = SteamService.Instance.HostLobby();
         mPendingNet = NetMatch.Create(NetRole.Host, transport, TemplateFromSettings());
 
         mWaitTitle.text = "Пригласи друга";
@@ -387,7 +387,7 @@ public class MenuManager : MonoBehaviour
     }
 
     /// <summary>Гость: друг пригласил, мы приняли — входим в его лобби.</summary>
-    private void JoinSteamLobby(Steamworks.CSteamID lobby)
+    private void JoinSteamLobby(ulong lobby)
     {
         // Посреди своей партии чужое приглашение не принимаем.
         if (mGame.State != null && !mGame.State.IsOver)
@@ -397,7 +397,7 @@ public class MenuManager : MonoBehaviour
         }
         mGame.StopGame();
         mPendingNet?.Close();
-        SteamLobbyTransport transport = SteamService.Instance.JoinLobby(lobby);
+        INetTransport transport = SteamService.Instance.JoinLobby(lobby);
         mPendingNet = NetMatch.Create(NetRole.Guest, transport);
 
         mWaitTitle.text = "Подключаемся к другу…";
@@ -416,11 +416,10 @@ public class MenuManager : MonoBehaviour
 
         if (mPendingNet.Transport.Status == TransportStatus.Connected && mWaitStatus != null)
         {
-            string friend = mPendingNet.Transport is SteamLobbyTransport st
-                ? SteamService.Instance.FriendName(st.Opponent) : "";
+            string friend = SteamService.Instance != null ? SteamService.Instance.OpponentName(mPendingNet.Transport) : "";
             mWaitStatus.text = (friend.Length > 0 ? friend + " на связи" : "Соединение есть") + ", договариваемся о партии…";
         }
-        else if (mPendingNet.Transport is SteamLobbyTransport { IsHost: true } host && host.Lobby.IsValid() && mWaitStatus != null)
+        else if (SteamService.Instance != null && SteamService.Instance.IsLobbyReady(mPendingNet.Transport) && mWaitStatus != null)
             mWaitStatus.text = "Лобби создано, ждём друга…";
 
         foreach (NetEvent e in mPendingNet.Poll())
@@ -494,8 +493,7 @@ public class MenuManager : MonoBehaviour
     /// <summary>Кнопка «Меню» поверх доски во время партии.</summary>
     private void BuildHud()
     {
-        var rt = UiKit.CreateUi("HUD", mCanvas.transform);
-        UiKit.Stretch(rt);
+        var rt = UiKit.CreateSafeRoot(mCanvas.transform, "HUD");
         mHud = rt.gameObject;
 
         var btn = UiKit.CreateImageButton(rt, "menu", 56, OpenPause);
@@ -518,17 +516,10 @@ public class MenuManager : MonoBehaviour
         UiKit.CreateImageButton(col, "play_players", BigButtonHeight, () => Show(Screen.Players));
         UiKit.CreatePlateButton(col, "Обучение", new Vector2(361, BigButtonHeight), () => Show(Screen.Lessons), 38);
         UiKit.CreateImageButton(col, "options", BigButtonHeight, () => OpenOptions(Screen.Main));
-        UiKit.CreateImageButton(col, "exit", BigButtonHeight, Quit);
+        if (Platform.CanQuit)
+            UiKit.CreateImageButton(col, "exit", BigButtonHeight, Quit);
 
         SoundToggles(root);
-
-        // Авторство сторонних материалов (лицензия CC BY-SA требует указать его в игре).
-        var credits = UiKit.CreateText("Credits", root, "Эмодзи: OpenMoji — openmoji.org, лицензия CC BY-SA 4.0",
-            18, new Color(0.6f, 0.65f, 0.6f, 1f), TextAnchor.LowerLeft, shadow: false);
-        var crt = (RectTransform)credits.transform;
-        crt.anchorMin = crt.anchorMax = crt.pivot = new Vector2(0, 0);
-        crt.anchoredPosition = new Vector2(16, 10);
-        crt.sizeDelta = new Vector2(700, 26);
         return root.gameObject;
     }
 
@@ -586,7 +577,8 @@ public class MenuManager : MonoBehaviour
         Place(col, new Vector2(0.5f, 0.5f), new Vector2(0, 10));
         var size = new Vector2(560, BigButtonHeight);
         UiKit.CreatePlateButton(col, "За одним компьютером", size, () => Show(Screen.LocalSetup), 34);
-        UiKit.CreatePlateButton(col, "Играть с другом в Steam", size, OpenSteamSetup, 34);
+        if (SteamService.Supported)
+            UiKit.CreatePlateButton(col, "Играть с другом в Steam", size, OpenSteamSetup, 34);
         UiKit.CreatePlateButton(col, "Создать игру по сети", size, () =>
         {
             mHostViaSteam = false;
@@ -601,7 +593,9 @@ public class MenuManager : MonoBehaviour
         }, 34);
 
         var info = UiKit.CreateText("Info", col,
-            "Через Steam — приглашение другу, ничего настраивать не нужно.\nПо IP — в локальной сети, через Radmin VPN или по интернету.",
+            SteamService.Supported
+                ? "Через Steam — приглашение другу, ничего настраивать не нужно.\nПо IP — в локальной сети, через Radmin VPN или по интернету."
+                : "По IP — в одной сети Wi-Fi, через VPN или по интернету.\nИграть можно и с ПК: версии совместимы.",
             24, new Color(0.75f, 0.8f, 0.75f, 1f));
         ((RectTransform)info.transform).sizeDelta = new Vector2(1000, 80);
 
@@ -838,11 +832,9 @@ public class MenuManager : MonoBehaviour
 
     private RectTransform ScreenRoot(string name, Color background)
     {
-        var img = UiKit.CreatePanel(name, mCanvas.transform, background);
-        img.raycastTarget = true; // перекрывает доску — клики не проходят насквозь
-        if (background == UiKit.Background)
-            UiKit.CreateBackdrop(img.transform, "bg_menu");
-        return (RectTransform)img.transform;
+        // Фон перекрывает доску (клики не проходят насквозь), содержимое — в безопасной зоне экрана.
+        return UiKit.CreateScreen(name, mCanvas.transform, background,
+            background == UiKit.Background ? "bg_menu" : null);
     }
 
     private static Text Title(Transform parent, string text, int size, Vector2 offsetFromTop)

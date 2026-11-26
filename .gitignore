@@ -53,3 +53,8 @@ sysinfo.txt
 .DS_Store
 Thumbs.db
 Desktop.ini
+
+# Временные файлы Android-сборки и отладочные папки IL2CPP/Burst (появляются рядом с проектом при сборке)
+/.utmp/
+*_BackUpThisFolder_ButDontShipItWithYourGame/
+*_BurstDebugInformation_DoNotShip/

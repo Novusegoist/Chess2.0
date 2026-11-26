@@ -1,20 +1,33 @@
+// Steam есть только в версии для ПК. На телефонах Steamworks.NET не собирается,
+// поэтому там остаётся заглушка с тем же API (Ready = false).
+#if UNITY_STANDALONE_WIN || UNITY_STANDALONE_LINUX || UNITY_STANDALONE_OSX
+#define STEAM_SUPPORTED
+#endif
+
 using System;
 using System.Collections.Generic;
 using System.Text;
 using Chess2.Core.Net;
-using Steamworks;
 using UnityEngine;
+#if STEAM_SUPPORTED
+using Steamworks;
+#endif
 
+#if STEAM_SUPPORTED
 /// <summary>
 /// Работа со Steam: запуск Steamworks, лобби «только для друзей» на двоих, приглашения через оверлей.
 /// Сообщения партии ходят через чат лобби — их передаёт Steam, порты открывать не нужно.
 ///
 /// Если Steam не запущен, Ready = false, а игра работает как обычно (по IP и с ботом).
 /// AppID берётся из steam_appid.txt рядом с игрой (сейчас тестовый 480 — «Spacewar»).
+/// Номера лобби наружу отдаются как ulong, чтобы меню не зависело от Steamworks.
 /// </summary>
 public class SteamService : MonoBehaviour
 {
     public const string LobbyGameKey = "chess2";
+
+    /// <summary>Steam вообще возможен на этой платформе.</summary>
+    public static bool Supported => true;
 
     public static SteamService Instance { get; private set; }
 
@@ -25,7 +38,7 @@ public class SteamService : MonoBehaviour
     public string InitError { get; private set; }
 
     /// <summary>Друг пригласил нас, и мы приняли приглашение в Steam (номер лобби).</summary>
-    public event Action<CSteamID> InviteAccepted;
+    public event Action<ulong> InviteAccepted;
 
     private Callback<GameLobbyJoinRequested_t> mJoinRequested;
     private Callback<LobbyChatUpdate_t> mChatUpdate;
@@ -95,16 +108,25 @@ public class SteamService : MonoBehaviour
     }
 
     /// <summary>Приглашение, с которым запустили игру (одноразово).</summary>
-    public bool TryTakePendingInvite(out CSteamID lobby)
+    public bool TryTakePendingInvite(out ulong lobby)
     {
-        lobby = mPendingInvite;
+        lobby = mPendingInvite.m_SteamID;
+        bool valid = mPendingInvite.IsValid();
         mPendingInvite = CSteamID.Nil;
-        return lobby.IsValid();
+        return valid;
     }
 
     public string MyName => Ready ? SteamFriends.GetPersonaName() : "";
 
     public string FriendName(CSteamID id) => Ready && id.IsValid() ? SteamFriends.GetFriendPersonaName(id) : "";
+
+    /// <summary>Имя соперника в Steam, если соединение идёт через Steam-лобби.</summary>
+    public string OpponentName(INetTransport transport) =>
+        transport is SteamLobbyTransport t ? FriendName(t.Opponent) : "";
+
+    /// <summary>Хост уже создал лобби и ждёт друга.</summary>
+    public bool IsLobbyReady(INetTransport transport) =>
+        transport is SteamLobbyTransport { IsHost: true } t && t.Lobby.IsValid();
 
     #region Лобби
 
@@ -118,8 +140,9 @@ public class SteamService : MonoBehaviour
     }
 
     /// <summary>Войти в лобби друга (принятое приглашение).</summary>
-    public SteamLobbyTransport JoinLobby(CSteamID lobby)
+    public SteamLobbyTransport JoinLobby(ulong lobbyId)
     {
+        var lobby = new CSteamID(lobbyId);
         var t = Attach(new SteamLobbyTransport(this, isHost: false));
         t.SetStatus(TransportStatus.Connecting);
         mLobbyEntered.Set(SteamMatchmaking.JoinLobby(lobby));
@@ -248,7 +271,7 @@ public class SteamService : MonoBehaviour
     private void OnJoinRequested(GameLobbyJoinRequested_t request)
     {
         if (InviteAccepted != null)
-            InviteAccepted(request.m_steamIDLobby);
+            InviteAccepted(request.m_steamIDLobby.m_SteamID);
         else
             mPendingInvite = request.m_steamIDLobby;
     }
@@ -321,3 +344,44 @@ public class SteamLobbyTransport : INetTransport
         Close();
     }
 }
+#else
+/// <summary>Заглушка для платформ без Steam (телефоны): Steam недоступен, игра по IP и с ботом работает.</summary>
+public class SteamService : MonoBehaviour
+{
+    public static bool Supported => false;
+
+    public static SteamService Instance { get; private set; }
+
+    public bool Ready => false;
+
+    public string InitError => "Steam есть только в версии для ПК";
+
+#pragma warning disable 67 // событие никогда не срабатывает — так и задумано
+    public event Action<ulong> InviteAccepted;
+#pragma warning restore 67
+
+    void Awake() => Instance = this;
+
+    void OnDestroy()
+    {
+        if (Instance == this)
+            Instance = null;
+    }
+
+    public bool TryTakePendingInvite(out ulong lobby)
+    {
+        lobby = 0;
+        return false;
+    }
+
+    public INetTransport HostLobby() => throw new NotSupportedException(InitError);
+
+    public INetTransport JoinLobby(ulong lobby) => throw new NotSupportedException(InitError);
+
+    public void OpenInviteDialog() { }
+
+    public string OpponentName(INetTransport transport) => "";
+
+    public bool IsLobbyReady(INetTransport transport) => false;
+}
+#endif

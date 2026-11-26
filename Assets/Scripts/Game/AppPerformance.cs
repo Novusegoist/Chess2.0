@@ -25,6 +25,8 @@ public class AppPerformance : MonoBehaviour
     {
         sInstance = this;
         Application.runInBackground = true;
+        if (Platform.IsMobile)
+            Screen.sleepTimeout = SleepTimeout.NeverSleep; // экран не гаснет, пока думаешь над ходом
         SimplifyRendering();
         CreateBrightnessLayer();
         ApplyAll();
@@ -34,6 +36,8 @@ public class AppPerformance : MonoBehaviour
     /// <summary>Курсор-стрелка в цветах кнопок (Resources/UI/cursor). Кончик — в левом верхнем углу.</summary>
     private static void ApplyCursor()
     {
+        if (Platform.IsMobile)
+            return; // на телефоне курсора нет
         var cursor = Resources.Load<Texture2D>("UI/cursor");
         if (cursor != null)
             Cursor.SetCursor(cursor, new Vector2(1, 1), CursorMode.Auto);
@@ -63,6 +67,8 @@ public class AppPerformance : MonoBehaviour
     /// </summary>
     public static void ApplyScreen()
     {
+        if (Platform.IsMobile)
+            return; // на телефоне игра всегда во весь экран, разрешение решает система
         if (AppSettings.Fullscreen)
         {
             if (!TryParseResolution(AppSettings.Resolution, out int w, out int h))
@@ -105,6 +111,8 @@ public class AppPerformance : MonoBehaviour
 
     void Update()
     {
+        if (Platform.IsMobile)
+            return;
         if (F11Pressed())
             ToggleFullscreen();
         RememberWindowSize();
@@ -142,7 +150,7 @@ public class AppPerformance : MonoBehaviour
     {
         bool focused = sInstance == null || sInstance.mFocused;
         // VSync сам ограничивает кадры частотой монитора; без него работает targetFrameRate.
-        QualitySettings.vSyncCount = AppSettings.VSync && focused ? 1 : 0;
+        QualitySettings.vSyncCount = AppSettings.VSync && focused && Platform.IsDesktop ? 1 : 0;
         int limit = AppSettings.FpsLimit;
         Application.targetFrameRate = !focused ? BackgroundFps : limit > 0 ? limit : -1;
     }

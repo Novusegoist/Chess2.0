@@ -1050,18 +1050,21 @@ public class GameManager : MonoBehaviour
         background.raycastTarget = false;
         UiKit.CreateBackdrop(background.transform, "bg_game");
 
+        // Всё остальное — в безопасной зоне экрана (на телефоне не под вырезом камеры).
+        RectTransform safe = UiKit.CreateSafeRoot(canvas.transform);
+
         // Доска 800x800 по центру, сверху и снизу по 50 под надписи.
-        var boardRt = UiKit.CreateUi("Board", canvas.transform, typeof(Board));
+        var boardRt = UiKit.CreateUi("Board", safe, typeof(Board));
         boardRt.sizeDelta = new Vector2(800, 800);
         mBoard = boardRt.GetComponent<Board>();
 
-        var piecesRt = UiKit.CreateUi("Pieces", canvas.transform, typeof(PieceManager));
+        var piecesRt = UiKit.CreateUi("Pieces", safe, typeof(PieceManager));
         piecesRt.sizeDelta = new Vector2(800, 800);
         mPieceManager = piecesRt.GetComponent<PieceManager>();
 
         if (mStatusText == null)
         {
-            mStatusText = UiKit.CreateText("Status", canvas.transform, "", 30, UiKit.TextLight);
+            mStatusText = UiKit.CreateText("Status", safe, "", 30, UiKit.TextLight);
             var rt = (RectTransform)mStatusText.transform;
             rt.anchorMin = new Vector2(0, 1);
             rt.anchorMax = new Vector2(1, 1);
@@ -1071,7 +1074,7 @@ public class GameManager : MonoBehaviour
         }
 
         // Подсказка под доской: что значат цвета меток у выбранной фигуры.
-        mHintText = UiKit.CreateText("Hint", canvas.transform, "", 20, new Color(0.85f, 0.88f, 0.85f, 1f));
+        mHintText = UiKit.CreateText("Hint", safe, "", 20, new Color(0.85f, 0.88f, 0.85f, 1f));
         mHintText.supportRichText = true;
         var hrt = (RectTransform)mHintText.transform;
         hrt.anchorMin = new Vector2(0, 0);
@@ -1081,30 +1084,30 @@ public class GameManager : MonoBehaviour
         hrt.sizeDelta = new Vector2(0, 36);
 
         // Кнопка взрыва троянского коня — справа от доски, видна только когда выбран конь.
-        mExplodeButton = UiKit.CreatePlateButton(canvas.transform, "Взорвать коня", new Vector2(270, 72), ExplodeSelected, 30);
+        mExplodeButton = UiKit.CreatePlateButton(safe, "Взорвать коня", new Vector2(270, 72), ExplodeSelected, 30);
         var ert = (RectTransform)mExplodeButton.transform;
         ert.anchoredPosition = new Vector2(400 + 40 + 135, 0);
         mExplodeButton.gameObject.SetActive(false);
 
         // Часы справа от доски: сверху — соперник, снизу — тот, кто внизу доски.
-        mTopClock = ClockPanel.Create(canvas.transform, new Vector2(400 + 40 + 115, 400 - 50));
-        mBottomClock = ClockPanel.Create(canvas.transform, new Vector2(400 + 40 + 115, -400 + 50));
+        mTopClock = ClockPanel.Create(safe, new Vector2(400 + 40 + 115, 400 - 50));
+        mBottomClock = ClockPanel.Create(safe, new Vector2(400 + 40 + 115, -400 + 50));
 
         // Чат слева от доски (только в сетевой игре) и слой для всплывающих эмодзи поверх всего.
-        var floatLayer = UiKit.CreateUi("Emote Layer", canvas.transform);
+        var floatLayer = UiKit.CreateUi("Emote Layer", safe);
         floatLayer.sizeDelta = Vector2.zero;
-        mChat = ChatPanel.Create(canvas.transform, new Vector2(-(400 + 35 + ChatPanel.Width / 2), -10), floatLayer,
+        mChat = ChatPanel.Create(safe, new Vector2(-(400 + 35 + ChatPanel.Width / 2), -10), floatLayer,
             SendChatText, SendEmote);
         mChat.gameObject.SetActive(false);
         floatLayer.SetAsLastSibling();
 
         // Панель урока на месте чата.
-        mLessonPanel = LessonPanel.Create(canvas.transform, new Vector2(-(400 + 35 + LessonPanel.Width / 2), -10),
+        mLessonPanel = LessonPanel.Create(safe, new Vector2(-(400 + 35 + LessonPanel.Width / 2), -10),
             NextLesson, () => LessonMenuRequested?.Invoke());
         mLessonPanel.gameObject.SetActive(false);
 
         // Баннер поверх доски («Король пал!»). Не ловит клики.
-        mBannerText = UiKit.CreateText("Banner", canvas.transform, "", 48, new Color32(255, 225, 255, 255));
+        mBannerText = UiKit.CreateText("Banner", safe, "", 48, new Color32(255, 225, 255, 255));
         mBannerText.fontStyle = FontStyle.Bold;
         mBannerText.lineSpacing = 1.1f;
         var outline = mBannerText.gameObject.AddComponent<Outline>();
