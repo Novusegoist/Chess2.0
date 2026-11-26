@@ -62,6 +62,9 @@ public class PieceManager : MonoBehaviour
             {
                 mFireLayer = UiKit.CreateUi("Fire Layer", transform);
                 UiKit.Stretch(mFireLayer);
+                // Свой вложенный Canvas: огонь меняет кадр 30 раз в секунду,
+                // и без этого пересобирался бы весь слой фигур.
+                mFireLayer.gameObject.AddComponent<Canvas>();
             }
             mFireLayer.SetSiblingIndex(0);
             return mFireLayer;

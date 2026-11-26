@@ -14,6 +14,9 @@ public class ClockPanel : MonoBehaviour
     private Image mBack;
     private Text mLabel;
     private Text mTime;
+    private long mLastShown = -1;
+    private bool mLastActive;
+    private string mLastLabel;
 
     public static ClockPanel Create(Transform parent, Vector2 position)
     {
@@ -49,6 +52,14 @@ public class ClockPanel : MonoBehaviour
     /// <summary>active — сейчас ход этой стороны и часы идут.</summary>
     public void Show(string label, double seconds, bool active)
     {
+        // Перерисовываем, только если показания изменились (не каждый кадр).
+        long shown = seconds < 10 ? (long)(seconds * 10) : (long)System.Math.Ceiling(seconds) * 10;
+        if (shown == mLastShown && active == mLastActive && label == mLastLabel)
+            return;
+        mLastShown = shown;
+        mLastActive = active;
+        mLastLabel = label;
+
         mLabel.text = label;
         mTime.text = ChessClock.Format(seconds);
         mBack.color = active ? ActiveBack : IdleBack;

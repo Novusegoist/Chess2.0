@@ -71,6 +71,8 @@ public class MenuManager : MonoBehaviour
         var game = FindAnyObjectByType<GameManager>();
         if (game == null)
             game = new GameObject("Chess2").AddComponent<GameManager>();
+        if (game.GetComponent<AppPerformance>() == null)
+            game.gameObject.AddComponent<AppPerformance>();
         if (game.GetComponent<MenuManager>() == null)
             game.gameObject.AddComponent<MenuManager>();
     }
