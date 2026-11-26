@@ -70,6 +70,10 @@ public class GameManager : MonoBehaviour
     private bool mBuilt;
     private ClockPanel mTopClock;
     private ClockPanel mBottomClock;
+    private ChatPanel mChat;
+    private NetMatch mChatOpponent; // с кем сейчас переписка (новый соперник — чистая история)
+    private float mLastChatSent = -10f;
+    private const float ChatCooldown = 0.5f;
 
     void Start()
     {
@@ -125,6 +129,7 @@ public class GameManager : MonoBehaviour
     public void StartNetGame(NetMatch net)
     {
         EnsureBuilt();
+        bool rematch = mChatOpponent == net;
         Net = net;
         NetSetup setup = net.Setup;
         TimeMinutes = setup.TimeMinutes;
@@ -133,6 +138,17 @@ public class GameManager : MonoBehaviour
         Paused = false;
         SetVisible(true);
         NewGame();
+        if (mChat != null)
+        {
+            if (!rematch)
+            {
+                mChat.Clear();
+                mChat.AddSystem("Соперник подключился. Удачной игры!");
+            }
+            else
+                mChat.AddSystem("Реванш! Цвета поменялись.");
+        }
+        mChatOpponent = net;
         NetGameStarted?.Invoke();
     }
 
@@ -177,6 +193,8 @@ public class GameManager : MonoBehaviour
         // В сетевой игре зерно общее — загорятся одни и те же фигуры у обоих.
         State = GameState.CreateStandard(Rules, Net != null ? Net.Setup.Seed : (int?)null);
         Clock = new ChessClock(TimeMinutes);
+        if (mChat != null)
+            mChat.gameObject.SetActive(Net != null); // чат — только в сетевой игре
 
         // Человек всегда снизу.
         mBoard.SetFlipped(Net != null ? LocalSide == Side.Black : PlayVsBot && BotSide == Side.White);
@@ -347,6 +365,14 @@ public class GameManager : MonoBehaviour
                     StartNetGame(Net); // реванш
                     break;
 
+                case NetEventKind.Chat:
+                    mChat?.AddText("Соперник", false, e.Text);
+                    break;
+
+                case NetEventKind.Emote:
+                    mChat?.AddEmote("Соперник", false, e.Value, EmotePosition(LocalSide.Opponent()));
+                    break;
+
                 case NetEventKind.Disconnected:
                     CloseNet(string.IsNullOrEmpty(e.Text) ? "Соперник отключился" : e.Text);
                     return;
@@ -354,8 +380,40 @@ public class GameManager : MonoBehaviour
         }
     }
 
+    private void SendChatText(string text)
+    {
+        if (Net == null || Net.Transport.Status != Chess2.Core.Net.TransportStatus.Connected)
+            return;
+        if (Time.unscaledTime - mLastChatSent < ChatCooldown)
+            return; // защита от спама
+        string sent = Net.SendChat(text);
+        if (sent.Length == 0)
+            return;
+        mLastChatSent = Time.unscaledTime;
+        mChat.AddText("Ты", true, sent);
+    }
+
+    private void SendEmote(int id)
+    {
+        if (Net == null || Net.Transport.Status != Chess2.Core.Net.TransportStatus.Connected)
+            return;
+        if (Time.unscaledTime - mLastChatSent < ChatCooldown)
+            return;
+        mLastChatSent = Time.unscaledTime;
+        Net.SendEmote(id);
+        mChat.AddEmote("Ты", true, id, EmotePosition(LocalSide));
+    }
+
+    /// <summary>Где всплывает крупный эмодзи: справа, у часов того, кто его отправил.</summary>
+    private Vector2 EmotePosition(Side side)
+    {
+        Side bottom = mBoard.Flipped ? Side.Black : Side.White;
+        return new Vector2(400 + 40 + 115, side == bottom ? -200 : 200);
+    }
+
     private void CloseNet(string reason)
     {
+        mChat?.AddSystem(reason);
         if (State != null && !State.IsOver)
         {
             ShowBanner(reason);
@@ -758,6 +816,14 @@ public class GameManager : MonoBehaviour
         // Часы справа от доски: сверху — соперник, снизу — тот, кто внизу доски.
         mTopClock = ClockPanel.Create(canvas.transform, new Vector2(400 + 40 + 115, 400 - 50));
         mBottomClock = ClockPanel.Create(canvas.transform, new Vector2(400 + 40 + 115, -400 + 50));
+
+        // Чат слева от доски (только в сетевой игре) и слой для всплывающих эмодзи поверх всего.
+        var floatLayer = UiKit.CreateUi("Emote Layer", canvas.transform);
+        floatLayer.sizeDelta = Vector2.zero;
+        mChat = ChatPanel.Create(canvas.transform, new Vector2(-(400 + 35 + ChatPanel.Width / 2), -10), floatLayer,
+            SendChatText, SendEmote);
+        mChat.gameObject.SetActive(false);
+        floatLayer.SetAsLastSibling();
 
         // Баннер поверх доски («Король пал!»). Не ловит клики.
         mBannerText = UiKit.CreateText("Banner", canvas.transform, "", 48, new Color32(255, 225, 255, 255));

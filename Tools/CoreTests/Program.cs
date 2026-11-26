@@ -55,6 +55,7 @@ internal static class Program
         Run("Сеть: хост и гость через localhost играют одну и ту же партию", NetFullGame);
         Run("Сеть: сдача, реванш со сменой цветов, отключение", NetResignRematchDisconnect);
         Run("Сеть: подключение к закрытому порту сообщает об ошибке", NetConnectFails);
+        Run("Сеть: чат (кириллица, переносы, длина) и эмодзи", NetChat);
         Run("Бот: мат в 1 ход", BotMateInOne);
         Run("Бот: добивает последнюю фигуру соперника", BotFinishes);
         Run("Бот: бьёт незащищённого ферзя", BotHitsQueen);
@@ -863,6 +864,32 @@ internal static class Program
 
             guest.Close();
             True(Pump(host, he, guest, ge, () => he.Any(e => e.Kind == Chess2.Core.Net.NetEventKind.Disconnected)), "хост узнал об отключении");
+        }
+        finally
+        {
+            host.Close();
+            guest.Close();
+        }
+    }
+
+    private static void NetChat()
+    {
+        var (host, guest, he, ge) = NetPair();
+        try
+        {
+            he.Clear();
+            ge.Clear();
+            string sent = host.SendChat("  Привет!\nХороший ход 👍  ");
+            Eq("Привет! Хороший ход 👍", sent, "перенос заменён пробелом, края обрезаны");
+            guest.SendEmote(7);
+            True(Pump(host, he, guest, ge, () =>
+                ge.Any(e => e.Kind == Chess2.Core.Net.NetEventKind.Chat) &&
+                he.Any(e => e.Kind == Chess2.Core.Net.NetEventKind.Emote)), "сообщения дошли");
+            Eq(sent, ge.First(e => e.Kind == Chess2.Core.Net.NetEventKind.Chat).Text, "текст как отправлен");
+            Eq(7, he.First(e => e.Kind == Chess2.Core.Net.NetEventKind.Emote).Value, "номер эмодзи");
+
+            Eq(Chess2.Core.Net.NetMatch.MaxChatLength, Chess2.Core.Net.NetMatch.CleanChat(new string('а', 500)).Length, "длинное обрезано");
+            Eq("", host.SendChat("   \n  "), "пустое не отправляется");
         }
         finally
         {

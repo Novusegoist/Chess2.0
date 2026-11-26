@@ -392,6 +392,14 @@ public class MenuManager : MonoBehaviour
         UiKit.CreateImageButton(col, "exit", BigButtonHeight, Quit);
 
         SoundToggles(root);
+
+        // Авторство сторонних материалов (лицензия CC BY-SA требует указать его в игре).
+        var credits = UiKit.CreateText("Credits", root, "Эмодзи: OpenMoji — openmoji.org, лицензия CC BY-SA 4.0",
+            18, new Color(0.6f, 0.65f, 0.6f, 1f), TextAnchor.LowerLeft, shadow: false);
+        var crt = (RectTransform)credits.transform;
+        crt.anchorMin = crt.anchorMax = crt.pivot = new Vector2(0, 0);
+        crt.anchoredPosition = new Vector2(16, 10);
+        crt.sizeDelta = new Vector2(700, 26);
         return root.gameObject;
     }
 

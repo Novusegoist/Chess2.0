@@ -47,7 +47,9 @@ public static class UiKit
         var scaler = go.GetComponent<CanvasScaler>();
         scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
         scaler.referenceResolution = new Vector2(1600, 900);
-        scaler.matchWidthOrHeight = 1f; // по высоте — доска и меню всегда влезают
+        // Expand: область 1600×900 видна целиком при любом размере окна —
+        // в узком окне ничего не уезжает за край (окно можно тянуть мышкой).
+        scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.Expand;
         // Стрелка «назад» — это стрелка «вперёд», развёрнутая на 180°. По умолчанию Unity не даёт
         // нажимать такие «развёрнутые задом» элементы, из-за этого кнопка «назад» не работала.
         go.GetComponent<GraphicRaycaster>().ignoreReversedGraphics = false;

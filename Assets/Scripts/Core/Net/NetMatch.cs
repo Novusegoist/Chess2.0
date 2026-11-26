@@ -85,7 +85,13 @@ namespace Chess2.Core.Net
         RematchRequested,
 
         /// <summary>Соединение закрыто. Text — причина (может быть пустой).</summary>
-        Disconnected
+        Disconnected,
+
+        /// <summary>Сообщение в чат. Text — текст.</summary>
+        Chat,
+
+        /// <summary>Эмодзи-реакция. Value — номер эмодзи.</summary>
+        Emote
     }
 
     public struct NetEvent
@@ -95,17 +101,22 @@ namespace Chess2.Core.Net
         public Move Move;
         public double ClockSeconds;
         public string Text;
+        public int Value;
     }
 
     /// <summary>
     /// Сетевая партия один на один поверх TcpTransport.
     /// Протокол — текстовые строки: «HELLO версия», «SETUP …», «MOVE откуда куда вид время», «RESIGN»,
-    /// «TIMEOUT», «REMATCH», «BYE». Каждая сторона сама проверяет чужие ходы по правилам.
+    /// «TIMEOUT», «REMATCH», «CHAT текст», «EMOTE номер», «BYE». Каждая сторона сама проверяет чужие ходы по правилам.
     /// Все события забираются в основном потоке через Poll().
     /// </summary>
     public sealed class NetMatch : IDisposable
     {
-        public const int ProtocolVersion = 1;
+        /// <summary>2 — добавлены чат и эмодзи.</summary>
+        public const int ProtocolVersion = 2;
+
+        /// <summary>Максимальная длина сообщения в чате.</summary>
+        public const int MaxChatLength = 120;
 
         public NetRole Role { get; }
         public TcpTransport Transport { get; } = new TcpTransport();
@@ -188,6 +199,29 @@ namespace Chess2.Core.Net
         }
 
         public void SendResign() => Transport.Send("RESIGN");
+
+        /// <summary>Сообщение в чат (обрезается до MaxChatLength). Возвращает то, что реально отправлено.</summary>
+        public string SendChat(string text)
+        {
+            text = CleanChat(text);
+            if (text.Length > 0)
+                Transport.Send("CHAT " + text);
+            return text;
+        }
+
+        public void SendEmote(int id) => Transport.Send("EMOTE " + id.ToString(CultureInfo.InvariantCulture));
+
+        /// <summary>Убрать переносы и управляющие символы, обрезать длину.</summary>
+        public static string CleanChat(string text)
+        {
+            if (string.IsNullOrEmpty(text))
+                return "";
+            var sb = new System.Text.StringBuilder(text.Length);
+            foreach (char c in text)
+                sb.Append(char.IsControl(c) ? ' ' : c);
+            string clean = sb.ToString().Trim();
+            return clean.Length > MaxChatLength ? clean.Substring(0, MaxChatLength) : clean;
+        }
 
         /// <summary>У нас кончилось время — сообщаем сопернику.</summary>
         public void SendTimeout() => Transport.Send("TIMEOUT");
@@ -278,6 +312,16 @@ namespace Chess2.Core.Net
                     }
                     else
                         events.Add(new NetEvent { Kind = NetEventKind.RematchRequested });
+                    break;
+
+                case "CHAT":
+                    string text = CleanChat(line.Length > 5 ? line.Substring(5) : "");
+                    if (text.Length > 0)
+                        events.Add(new NetEvent { Kind = NetEventKind.Chat, Text = text });
+                    break;
+
+                case "EMOTE":
+                    events.Add(new NetEvent { Kind = NetEventKind.Emote, Value = int.Parse(a[1], CultureInfo.InvariantCulture) });
                     break;
 
                 case "BYE":
