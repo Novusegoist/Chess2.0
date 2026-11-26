@@ -25,7 +25,7 @@ namespace Chess2.Core.Net
         /// <summary>Выбор хоста в меню: 0 — белые, 1 — чёрные, 2 — случайно (только для шаблона).</summary>
         public int HostColorChoice;
 
-        /// <summary>0 — «Шахматы 2.0», 1 — «Хаос».</summary>
+        /// <summary>0 — «Корона», 1 — «Хаос».</summary>
         public int Mode;
 
         public int TimeMinutes;

@@ -28,6 +28,15 @@ public class AppPerformance : MonoBehaviour
         SimplifyRendering();
         CreateBrightnessLayer();
         ApplyAll();
+        ApplyCursor();
+    }
+
+    /// <summary>Курсор-стрелка в цветах кнопок (Resources/UI/cursor). Кончик — в левом верхнем углу.</summary>
+    private static void ApplyCursor()
+    {
+        var cursor = Resources.Load<Texture2D>("UI/cursor");
+        if (cursor != null)
+            Cursor.SetCursor(cursor, new Vector2(1, 1), CursorMode.Auto);
     }
 
     void OnApplicationFocus(bool focused)

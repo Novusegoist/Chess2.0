@@ -14,7 +14,7 @@ internal static class Program
         if (args.Length > 0 && args[0] == "arena")
             return Arena(args.Length > 1 ? int.Parse(args[1]) : 10);
 
-        Run("Стартовая позиция: 20 ходов в «Шахматах 2.0», 24/46 в «Хаосе»", StartPosition);
+        Run("Стартовая позиция: 20 ходов в «Короне», 24/46 в «Хаосе»", StartPosition);
         Run("Взятие: цель слабеет на месте, атакующий не двигается", CaptureDegrades);
         Run("Полная цепочка деградации короля до исчезновения", FullChain);
         Run("Срубленный призрак уходит, атакующий встаёт на его клетку", GhostRemoved);
@@ -44,11 +44,11 @@ internal static class Program
         Run("Троянский конь: двойной прыжок с ударом — конь остаётся на промежуточной клетке", TrojanDoubleCapture);
         Run("Троянский конь: взрыв ослабляет всех соседей, конь и пассажир исчезают", TrojanExplode);
         Run("Троянский конь: в режиме «Мат» взрыв не задевает королей, двойной прыжок даёт шах", TrojanMateMode);
-        Run("«Шахматы 2.0»: мат — король уходит, 1–3 фигуры загораются, игра идёт", KingFallFirstMate);
-        Run("«Шахматы 2.0»: выбор загоревшихся фигур зависит только от зерна партии", KingFallDeterministic);
-        Run("«Шахматы 2.0»: армия без короля побеждает матом второму королю", KingFallSecondMate);
-        Run("«Шахматы 2.0»: армия без короля проигрывает, когда фигур не осталось", KingFallAnnihilation);
-        Run("«Шахматы 2.0»: способности только у загоревшихся фигур", KingFallAbilitiesOnlyEmpowered);
+        Run("«Корона»: мат — король уходит, 1–3 фигуры загораются, игра идёт", KingFallFirstMate);
+        Run("«Корона»: выбор загоревшихся фигур зависит только от зерна партии", KingFallDeterministic);
+        Run("«Корона»: армия без короля побеждает матом второму королю", KingFallSecondMate);
+        Run("«Корона»: армия без короля проигрывает, когда фигур не осталось", KingFallAnnihilation);
+        Run("«Корона»: способности только у загоревшихся фигур", KingFallAbilitiesOnlyEmpowered);
         Run("Часы: стартуют после первого хода, тикают у того, чей ход", ClockBasics);
         Run("Часы: флаг падает ровно на нуле, без контроля времени не тикают", ClockFlag);
         Run("Часы: формат времени", ClockFormat);
@@ -63,6 +63,8 @@ internal static class Program
         Run("Бот: бьёт незащищённого ферзя", BotHitsQueen);
         Run("Бот: в режиме «Мат» не подставляет короля", BotLegalInMateMode);
         Run("Бот: скорость перебора", BotSpeed);
+        foreach (Lesson lesson in Tutorial.Lessons)
+            Run("Урок «" + lesson.Title + "» проходится", () => LessonSolvable(lesson));
 
         Console.WriteLine();
         Console.WriteLine($"Итого: {_passed} прошло, {_failed} упало");
@@ -73,7 +75,7 @@ internal static class Program
 
     private static void StartPosition()
     {
-        Eq(20, Rules.GetLegalMoves(GameState.CreateStandard()).Count, "«Шахматы 2.0»: как в классике, способностей нет");
+        Eq(20, Rules.GetLegalMoves(GameState.CreateStandard()).Count, "«Корона»: как в классике, способностей нет");
 
         var s = GameState.CreateStandard(new RuleSet { WinCondition = WinCondition.Annihilation, AbilitiesForAll = true, TrojanKnight = false });
         var moves = Rules.GetLegalMoves(s);
@@ -1151,6 +1153,54 @@ internal static class Program
         string from = s["h8"].IsEmpty ? "g8" : "h8";
         string to = from == "h8" ? "g8" : "h8";
         return Rules.TryMakeMove(s, from, to);
+    }
+
+    /// <summary>Каждый шаг урока выполним: найдётся цепочка правильных ходов (до 5), ведущая к цели.</summary>
+    private static void LessonSolvable(Lesson lesson)
+    {
+        GameState s = lesson.Setup();
+        True(!s.IsOver, "позиция не закончена");
+        True(s.SideToMove == Side.White, "ходят белые");
+        True(Rules.GetLegalMoves(s).Count > 0, "у белых есть ходы");
+        foreach (LessonStep step in lesson.Steps)
+        {
+            GameState next = SolveStep(s, step, 5);
+            if (next == null)
+            {
+                Fail("не решается шаг: " + step.Task + Environment.NewLine + s.ToAscii());
+                return;
+            }
+            s = next;
+        }
+    }
+
+    private static GameState SolveStep(GameState s, LessonStep step, int depth)
+    {
+        if (depth == 0)
+            return null;
+        foreach (Move m in Rules.GetLegalMoves(s))
+        {
+            GameState c = s.Clone();
+            var effects = new List<MoveEffect>();
+            if (!Rules.TryMakeMove(c, m, effects))
+                continue;
+            LessonVerdict v = step.Check(c, c.LastMove ?? m, effects);
+            if (v == LessonVerdict.Wrong)
+                continue;
+            if (v == LessonVerdict.StepDone)
+            {
+                // Последний шаг может закончить партию, остальные — нет.
+                Tutorial.PassTurn(c);
+                return c;
+            }
+            if (c.IsOver)
+                continue;
+            Tutorial.PassTurn(c);
+            GameState r = SolveStep(c, step, depth - 1);
+            if (r != null)
+                return r;
+        }
+        return null;
     }
 
     private static void Run(string name, Action test)

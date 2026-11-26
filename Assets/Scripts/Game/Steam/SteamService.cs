@@ -166,7 +166,7 @@ public class SteamService : MonoBehaviour
         SteamMatchmaking.SetLobbyData(t.Lobby, "protocol", NetMatch.ProtocolVersion.ToString());
         // «Присоединиться к игре» в списке друзей Steam.
         SteamFriends.SetRichPresence("connect", "+connect_lobby " + t.Lobby.m_SteamID);
-        SteamFriends.SetRichPresence("status", "Ждёт соперника в «Шахматах 2.0»");
+        SteamFriends.SetRichPresence("status", "Ждёт соперника · Пепел и корона");
         OpenInviteDialog();
     }
 
@@ -185,7 +185,7 @@ public class SteamService : MonoBehaviour
         if (SteamMatchmaking.GetLobbyData(lobby, "game") != LobbyGameKey)
         {
             SteamMatchmaking.LeaveLobby(lobby);
-            t.Fail("Это лобби не от «Шахмат 2.0»");
+            t.Fail("Это лобби не от «Пепла и короны»");
             return;
         }
 
@@ -196,7 +196,7 @@ public class SteamService : MonoBehaviour
             t.Fail("Друг уже вышел из лобби");
             return;
         }
-        SteamFriends.SetRichPresence("status", "Играет в «Шахматы 2.0»");
+        SteamFriends.SetRichPresence("status", "Играет в «Пепел и корону»");
         t.SetStatus(TransportStatus.Connected);
     }
 
@@ -213,7 +213,7 @@ public class SteamService : MonoBehaviour
         if ((change & (uint)EChatMemberStateChange.k_EChatMemberStateChangeEntered) != 0 && t.IsHost)
         {
             t.Opponent = user;
-            SteamFriends.SetRichPresence("status", "Играет в «Шахматы 2.0»");
+            SteamFriends.SetRichPresence("status", "Играет в «Пепел и корону»");
             t.SetStatus(TransportStatus.Connected);
         }
 

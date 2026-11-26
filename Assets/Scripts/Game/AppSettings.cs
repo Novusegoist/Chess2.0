@@ -48,7 +48,7 @@ public static class AppSettings
     /// <summary>Варианты времени, которые предлагает меню.</summary>
     public static readonly int[] TimeOptions = { 0, 10, 15, 20 };
 
-    /// <summary>0 — «Шахматы 2.0» (основной), 1 — «Хаос» (все способности сразу, король слабеет).</summary>
+    /// <summary>0 — «Корона» (основной), 1 — «Хаос» (все способности сразу, король слабеет).</summary>
     public static int Mode
     {
         get => Mathf.Clamp(PlayerPrefs.GetInt(Prefix + "mode", 0), 0, 1);
@@ -183,6 +183,15 @@ public static class AppSettings
     {
         get => GetBool("hintText", true);
         set => SetBool("hintText", value);
+    }
+
+    /// <summary>Урок обучения пройден (по id урока).</summary>
+    public static bool IsLessonDone(string id) => GetBool("lesson." + id, false);
+
+    public static void MarkLessonDone(string id)
+    {
+        SetBool("lesson." + id, true);
+        Save();
     }
 
     #endregion

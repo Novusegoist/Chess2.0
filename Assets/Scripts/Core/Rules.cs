@@ -3,7 +3,7 @@ using System.Collections.Generic;
 namespace Chess2.Core
 {
     /// <summary>
-    /// Все правила «Шахмат 2.0»: генерация ходов, деградация, пробивание, троянский конь,
+    /// Все правила «Пепла и короны»: генерация ходов, деградация, пробивание, троянский конь,
     /// рокировка, возрождение пешки и определение итога партии.
     /// </summary>
     public static class Rules
@@ -750,7 +750,7 @@ namespace Chess2.Core
                 bool mated = s.Rules.WinCondition != WinCondition.Annihilation && IsInCheck(s, side);
                 if (mated && s.Rules.WinCondition == WinCondition.KingFall && s.FindKing(side.Opponent()) != Sq.None)
                 {
-                    // Первый мат в «Шахматах 2.0»: король уходит, армия загорается, игра продолжается.
+                    // Первый мат в режиме «Корона»: король уходит, армия загорается, игра продолжается.
                     KingFalls(s, side, effects);
                     EvaluateResult(s, effects);
                 }
@@ -821,7 +821,7 @@ namespace Chess2.Core
 
         /// <summary>
         /// Есть ли у фигуры способность её типа: конь — троянский, слон и ладья — пробивание,
-        /// ферзь — ходы коня. В «Шахматах 2.0» — только у загоревшихся фигур.
+        /// ферзь — ходы коня. В режиме «Корона» — только у загоревшихся фигур.
         /// </summary>
         public static bool HasAbility(GameState s, Piece p)
         {

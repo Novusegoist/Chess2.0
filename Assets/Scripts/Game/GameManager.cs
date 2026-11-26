@@ -55,6 +55,15 @@ public class GameManager : MonoBehaviour
     public event Action NetGameStarted;
     public event Action<string> NetClosed;
 
+    /// <summary>Идёт урок обучения (null — обычная партия).</summary>
+    public Lesson Lesson { get; private set; }
+
+    /// <summary>Текущий шаг урока (равен числу шагов, когда урок пройден).</summary>
+    public int LessonStepIndex { get; private set; }
+
+    /// <summary>Игрок нажал «К урокам» в конце урока.</summary>
+    public event Action LessonMenuRequested;
+
     private GameObject mRoot;
     private MenuButton mExplodeButton;
     private Text mBannerText;
@@ -75,6 +84,9 @@ public class GameManager : MonoBehaviour
     private float mLastChatSent = -10f;
     private bool mWasShaky;
     private const float ChatCooldown = 0.5f;
+    private LessonPanel mLessonPanel;
+    private GameState mStepStart;   // позиция в начале шага: к ней откатываемся после ошибки
+    private bool mLessonBusy;       // показываем «не то» и откатываем ход, ввод закрыт
 
     void Start()
     {
@@ -138,7 +150,13 @@ public class GameManager : MonoBehaviour
     }
 
     /// <summary>Та же партия заново (с теми же настройками).</summary>
-    public void Restart() => StartGame(PlayVsBot, BotSide, BotDifficulty, Rules, TimeMinutes);
+    public void Restart()
+    {
+        if (Lesson != null)
+            StartLesson(Lesson);
+        else
+            StartGame(PlayVsBot, BotSide, BotDifficulty, Rules, TimeMinutes);
+    }
 
     /// <summary>
     /// Начать сетевую партию по настройкам, которые прислал хост (или выбрал сам хост).
@@ -195,6 +213,7 @@ public class GameManager : MonoBehaviour
         }
         CancelBot();
         Deselect();
+        EndLesson();
         State = null;
         SetVisible(false);
     }
@@ -208,6 +227,7 @@ public class GameManager : MonoBehaviour
     private void NewGame()
     {
         CancelBot();
+        EndLesson();
         // В сетевой игре зерно общее — загорятся одни и те же фигуры у обоих.
         State = GameState.CreateStandard(Rules, Net != null ? Net.Setup.Seed : (int?)null);
         Clock = new ChessClock(TimeMinutes);
@@ -263,6 +283,12 @@ public class GameManager : MonoBehaviour
         }
 
         PlayMoveSound(State.LastMove ?? move, mEffects);
+
+        if (Lesson != null)
+        {
+            OnLessonMove(State.LastMove ?? move);
+            return true;
+        }
 
         if (State.IsOver)
             NotifyGameEnded();
@@ -343,6 +369,140 @@ public class GameManager : MonoBehaviour
             SoundManager.Play(weWon ? "win" : "lose", 1f, 0f);
         }
         GameEnded?.Invoke(State);
+    }
+
+    #endregion
+
+    #region Обучение
+
+    /// <summary>Начать урок: своя расстановка, без часов и бота, чёрные не ходят.</summary>
+    public void StartLesson(Lesson lesson)
+    {
+        EnsureBuilt();
+        if (Net != null)
+        {
+            Net.Close();
+            Net = null;
+        }
+        CancelBot();
+        if (mRetryRoutine != null)
+            StopCoroutine(mRetryRoutine);
+        mRetryRoutine = null;
+        mLessonBusy = false;
+        PlayVsBot = false;
+        TimeMinutes = 0;
+        Paused = false;
+        SetVisible(true);
+
+        Lesson = lesson;
+        LessonStepIndex = 0;
+        State = lesson.Setup();
+        Rules = State.Rules;
+        mStepStart = State.Clone();
+        Clock = new ChessClock(0);
+        if (mChat != null)
+            mChat.gameObject.SetActive(false);
+        mBoard.SetFlipped(false);
+        if (mBannerText != null)
+            mBannerText.gameObject.SetActive(false);
+
+        ShowPosition();
+        RefreshLessonPanel(null);
+        SoundManager.Play("start", 0.7f, 0f);
+    }
+
+    private Coroutine mRetryRoutine;
+
+    private void EndLesson()
+    {
+        if (Lesson == null)
+            return;
+        Lesson = null;
+        if (mRetryRoutine != null)
+            StopCoroutine(mRetryRoutine);
+        mRetryRoutine = null;
+        mLessonBusy = false;
+        if (mLessonPanel != null)
+            mLessonPanel.gameObject.SetActive(false);
+    }
+
+    private void ShowPosition()
+    {
+        Deselect();
+        mBoard.SetLastMove(null);
+        mPieceManager.Clear();
+        mPieceManager.Sync(State, null);
+        UpdateStatus();
+    }
+
+    private static Lesson NextLessonOf(Lesson lesson)
+    {
+        var all = Tutorial.Lessons;
+        for (int i = 0; i < all.Count - 1; i++)
+            if (all[i] == lesson)
+                return all[i + 1];
+        return null;
+    }
+
+    private void NextLesson()
+    {
+        Lesson next = Lesson != null ? NextLessonOf(Lesson) : null;
+        if (next != null)
+            StartLesson(next);
+        else
+            LessonMenuRequested?.Invoke();
+    }
+
+    private void RefreshLessonPanel(string note)
+    {
+        if (mLessonPanel == null || Lesson == null)
+            return;
+        mLessonPanel.gameObject.SetActive(true);
+        mLessonPanel.Show(Lesson, LessonStepIndex, note, NextLessonOf(Lesson) != null);
+    }
+
+    /// <summary>Игрок походил в уроке: засчитать шаг, принять как часть шага или откатить.</summary>
+    private void OnLessonMove(Move move)
+    {
+        if (LessonStepIndex >= Lesson.Steps.Length)
+            return;
+        LessonStep step = Lesson.Steps[LessonStepIndex];
+        switch (step.Check(State, move, mEffects))
+        {
+            case LessonVerdict.Progress:
+                Tutorial.PassTurn(State);
+                UpdateStatus();
+                RefreshLessonPanel(null);
+                break;
+
+            case LessonVerdict.StepDone:
+                Tutorial.PassTurn(State);
+                LessonStepIndex++;
+                mStepStart = State.Clone();
+                if (LessonStepIndex >= Lesson.Steps.Length)
+                {
+                    AppSettings.MarkLessonDone(Lesson.Id);
+                    SoundManager.PlayDelayed("win", 0.4f);
+                }
+                UpdateStatus();
+                RefreshLessonPanel(null);
+                break;
+
+            default:
+                mRetryRoutine = StartCoroutine(LessonRetry(step.Hint));
+                break;
+        }
+    }
+
+    private System.Collections.IEnumerator LessonRetry(string hint)
+    {
+        mLessonBusy = true;
+        RefreshLessonPanel("Не то. " + hint + ".");
+        yield return new WaitForSeconds(1.1f);
+        State = mStepStart.Clone();
+        mLessonBusy = false;
+        mRetryRoutine = null;
+        ShowPosition();
     }
 
     #endregion
@@ -601,7 +761,7 @@ public class GameManager : MonoBehaviour
 
     public bool CanPickUp(int sq)
     {
-        if (State == null || State.IsOver || IsBotTurn || IsRemoteTurn || Paused)
+        if (State == null || State.IsOver || IsBotTurn || IsRemoteTurn || Paused || mLessonBusy)
             return false;
         Piece p = State.Cells[sq];
         return !p.IsEmpty && p.Side == State.SideToMove;
@@ -609,7 +769,7 @@ public class GameManager : MonoBehaviour
 
     public void OnSquareClicked(int sq)
     {
-        if (State == null || IsBotTurn || IsRemoteTurn || Paused)
+        if (State == null || IsBotTurn || IsRemoteTurn || Paused || mLessonBusy)
             return;
 
         // Сначала пробуем походить выбранной фигурой.
@@ -728,6 +888,11 @@ public class GameManager : MonoBehaviour
     {
         if (State.IsOver)
             return ResultText(State);
+
+        if (Lesson != null)
+            return LessonStepIndex < Lesson.Steps.Length
+                ? "Задание: " + Lesson.Steps[LessonStepIndex].Task
+                : "Урок «" + Lesson.Title + "» пройден!";
 
         string text;
         if (IsBotTurn)
@@ -932,6 +1097,11 @@ public class GameManager : MonoBehaviour
             SendChatText, SendEmote);
         mChat.gameObject.SetActive(false);
         floatLayer.SetAsLastSibling();
+
+        // Панель урока на месте чата.
+        mLessonPanel = LessonPanel.Create(canvas.transform, new Vector2(-(400 + 35 + LessonPanel.Width / 2), -10),
+            NextLesson, () => LessonMenuRequested?.Invoke());
+        mLessonPanel.gameObject.SetActive(false);
 
         // Баннер поверх доски («Король пал!»). Не ловит клики.
         mBannerText = UiKit.CreateText("Banner", canvas.transform, "", 48, new Color32(255, 225, 255, 255));

@@ -19,7 +19,7 @@ using UnityEngine.InputSystem;
 [RequireComponent(typeof(GameManager))]
 public class MenuManager : MonoBehaviour
 {
-    private enum Screen { None, Main, BotSetup, Players, LocalSetup, HostSetup, Join, Waiting, Options, Pause, GameOver }
+    private enum Screen { None, Main, BotSetup, Players, LocalSetup, HostSetup, Join, Waiting, Options, Pause, GameOver, Lessons }
 
     private const float BigButtonHeight = 84f;
 
@@ -34,6 +34,7 @@ public class MenuManager : MonoBehaviour
     private MenuButton mAgainButton;
     private MenuButton mRestartButton;
     private MenuButton mResignButton;
+    private readonly List<MenuButton> mLessonButtons = new List<MenuButton>();
 
     // Сеть: подключение, пока партия ещё не началась (дальше соединением владеет GameManager).
     private NetMatch mPendingNet;
@@ -88,6 +89,7 @@ public class MenuManager : MonoBehaviour
         mGame.RematchOffered += OnRematchOffered;
         mGame.NetGameStarted += OnNetGameStarted;
         mGame.NetClosed += OnNetClosed;
+        mGame.LessonMenuRequested += OpenLessons;
     }
 
     void Start()
@@ -114,6 +116,7 @@ public class MenuManager : MonoBehaviour
             mGame.RematchOffered -= OnRematchOffered;
             mGame.NetGameStarted -= OnNetGameStarted;
             mGame.NetClosed -= OnNetClosed;
+            mGame.LessonMenuRequested -= OpenLessons;
         }
         mPendingNet?.Close();
         if (SteamService.Instance != null)
@@ -133,6 +136,7 @@ public class MenuManager : MonoBehaviour
             case Screen.Pause: ClosePause(); break;
             case Screen.Options: CloseOptions(); break;
             case Screen.BotSetup:
+            case Screen.Lessons:
             case Screen.Players: Show(Screen.Main); break;
             case Screen.LocalSetup:
             case Screen.HostSetup:
@@ -159,12 +163,14 @@ public class MenuManager : MonoBehaviour
         {
             // В сетевой партии «заново» нельзя — только сдаться или реванш после конца.
             mRestartButton.gameObject.SetActive(mGame.Net == null);
-            mResignButton.gameObject.SetActive(mGame.State != null && !mGame.State.IsOver);
+            mResignButton.gameObject.SetActive(mGame.State != null && !mGame.State.IsOver && mGame.Lesson == null);
         }
         if (screen == Screen.Options)
             mOptions.Refresh();
         if (screen == Screen.Main)
             RefreshAudioIcons(); // звук могли переключить в опциях
+        if (screen == Screen.Lessons)
+            RefreshLessons();
     }
 
     private void StartBotGame()
@@ -184,6 +190,27 @@ public class MenuManager : MonoBehaviour
         AppSettings.Save();
         mGame.StartGame(false, Side.Black, AppSettings.Difficulty, AppSettings.BuildRules(), AppSettings.TimeMinutes);
         Show(Screen.None);
+    }
+
+    private void OpenLessons()
+    {
+        mGame.StopGame();
+        Show(Screen.Lessons);
+    }
+
+    private void StartLesson(Lesson lesson)
+    {
+        mGame.StartLesson(lesson);
+        Show(Screen.None);
+    }
+
+    private void RefreshLessons()
+    {
+        for (int i = 0; i < mLessonButtons.Count; i++)
+        {
+            Lesson l = Tutorial.Lessons[i];
+            mLessonButtons[i].SetText((i + 1) + ". " + l.Title + (AppSettings.IsLessonDone(l.Id) ? "  (пройден)" : ""));
+        }
     }
 
     private void OpenPause()
@@ -461,6 +488,7 @@ public class MenuManager : MonoBehaviour
             (parent, text, size, offset) => Title(parent, text, size, offset), BottomBar);
         mScreens[Screen.Pause] = BuildPause();
         mScreens[Screen.GameOver] = BuildGameOver();
+        mScreens[Screen.Lessons] = BuildLessons();
     }
 
     /// <summary>Кнопка «Меню» поверх доски во время партии.</summary>
@@ -480,7 +508,7 @@ public class MenuManager : MonoBehaviour
     {
         var root = ScreenRoot("Main", UiKit.Background);
 
-        Title(root, "ШАХМАТЫ 2.0", 96, new Vector2(0, -110));
+        Title(root, "ПЕПЕЛ И КОРОНА", 96, new Vector2(0, -110));
         var sub = UiKit.CreateText("Subtitle", root, "фигуры не умирают — они слабеют", 30, new Color(0.8f, 0.85f, 0.8f, 1f));
         Place(sub.transform, new Vector2(0.5f, 1), new Vector2(0, -200));
 
@@ -488,6 +516,7 @@ public class MenuManager : MonoBehaviour
         Place(col, new Vector2(0.5f, 0.5f), new Vector2(0, -70));
         UiKit.CreateImageButton(col, "play_bot", BigButtonHeight, () => Show(Screen.BotSetup));
         UiKit.CreateImageButton(col, "play_players", BigButtonHeight, () => Show(Screen.Players));
+        UiKit.CreatePlateButton(col, "Обучение", new Vector2(361, BigButtonHeight), () => Show(Screen.Lessons), 38);
         UiKit.CreateImageButton(col, "options", BigButtonHeight, () => OpenOptions(Screen.Main));
         UiKit.CreateImageButton(col, "exit", BigButtonHeight, Quit);
 
@@ -681,6 +710,28 @@ public class MenuManager : MonoBehaviour
         return root.gameObject;
     }
 
+    /// <summary>«Обучение»: список уроков, у пройденных пометка.</summary>
+    private GameObject BuildLessons()
+    {
+        var root = ScreenRoot("Lessons", UiKit.Background);
+        Title(root, "Обучение", 64, new Vector2(0, -50));
+
+        var col = UiKit.CreateColumn("Lessons", root, 12);
+        Place(col, new Vector2(0.5f, 0.5f), new Vector2(0, -10));
+        foreach (Lesson lesson in Tutorial.Lessons)
+        {
+            Lesson l = lesson;
+            mLessonButtons.Add(UiKit.CreatePlateButton(col, l.Title, new Vector2(520, 66), () => StartLesson(l), 30));
+        }
+
+        var hint = UiKit.CreateText("Hint", root, "Короткие задания на доске: правила «Пепла и короны» за пять минут.",
+            22, new Color(0.8f, 0.85f, 0.88f, 1f));
+        Place(hint.transform, new Vector2(0.5f, 1), new Vector2(0, -130));
+
+        BottomBar(root, () => Show(Screen.Main), null, null);
+        return root.gameObject;
+    }
+
     private GameObject BuildPause()
     {
         var root = ScreenRoot("Pause", new Color(0.05f, 0.06f, 0.05f, 0.88f));
@@ -829,7 +880,7 @@ public class MenuManager : MonoBehaviour
     private Text ModeRow(Transform parent, List<MenuButton> into)
     {
         var row = UiKit.CreateRow("Mode", parent, 14);
-        into.Add(UiKit.CreatePlateButton(row, "Шахматы 2.0", new Vector2(300, 66), () =>
+        into.Add(UiKit.CreatePlateButton(row, "Корона", new Vector2(300, 66), () =>
         {
             AppSettings.Mode = 0;
             RefreshSetup();
