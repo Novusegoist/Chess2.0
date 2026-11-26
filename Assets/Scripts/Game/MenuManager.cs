@@ -40,6 +40,9 @@ public class MenuManager : MonoBehaviour
     private Text mWaitTitle;
     private Text mWaitText;
     private Text mWaitStatus;
+    private MenuButton mWaitAction;       // «Пригласить ещё раз» (только Steam-хост)
+    private Text mHostTitle;
+    private bool mHostViaSteam;           // экран настроек хоста открыт для игры через Steam
     private InputField mAddressField;
     private Text mJoinError;
     private readonly List<MenuButton> mHostColorButtons = new List<MenuButton>();
@@ -72,6 +75,8 @@ public class MenuManager : MonoBehaviour
             game.gameObject.AddComponent<AppPerformance>();
         if (game.GetComponent<SoundManager>() == null)
             game.gameObject.AddComponent<SoundManager>();
+        if (game.GetComponent<SteamService>() == null)
+            game.gameObject.AddComponent<SteamService>();
         if (game.GetComponent<MenuManager>() == null)
             game.gameObject.AddComponent<MenuManager>();
     }
@@ -90,6 +95,15 @@ public class MenuManager : MonoBehaviour
         UiKit.EnsureEventSystem();
         BuildUi();
         Show(Screen.Main);
+
+        SteamService steam = SteamService.Instance;
+        if (steam != null && steam.Ready)
+        {
+            steam.InviteAccepted += JoinSteamLobby;
+            // Игру запустили из приглашения друга в Steam.
+            if (steam.TryTakePendingInvite(out Steamworks.CSteamID lobby))
+                JoinSteamLobby(lobby);
+        }
     }
 
     void OnDestroy()
@@ -102,6 +116,8 @@ public class MenuManager : MonoBehaviour
             mGame.NetClosed -= OnNetClosed;
         }
         mPendingNet?.Close();
+        if (SteamService.Instance != null)
+            SteamService.Instance.InviteAccepted -= JoinSteamLobby;
     }
 
     void Update()
@@ -244,6 +260,11 @@ public class MenuManager : MonoBehaviour
 
     private void StartHosting()
     {
+        if (mHostViaSteam)
+        {
+            StartSteamHosting();
+            return;
+        }
         AppSettings.Save();
         var template = new NetSetup
         {
@@ -257,6 +278,7 @@ public class MenuManager : MonoBehaviour
         };
         mPendingNet?.Close();
         mPendingNet = NetMatch.Host(TcpTransport.DefaultPort, template);
+        mWaitAction.gameObject.SetActive(false);
 
         var addresses = NetInfo.LocalAddresses();
         mWaitTitle.text = "Ждём соперника…";
@@ -280,11 +302,85 @@ public class MenuManager : MonoBehaviour
 
         mPendingNet?.Close();
         mPendingNet = NetMatch.Join(host, port);
+        mWaitAction.gameObject.SetActive(false);
         mWaitTitle.text = "Подключаемся…";
         mWaitText.text = $"Адрес: {host}, порт {port}";
         mWaitStatus.text = "";
         Show(Screen.Waiting);
     }
+
+    #region Steam
+
+    private static NetSetup TemplateFromSettings() => new NetSetup
+    {
+        HostColorChoice = AppSettings.PlayerColor,
+        Mode = AppSettings.Mode,
+        TimeMinutes = AppSettings.TimeMinutes,
+        QueenMovesAsKnight = AppSettings.QueenMovesAsKnight,
+        EnablePierce = AppSettings.EnablePierce,
+        PierceThroughOwnPieces = AppSettings.PierceThroughOwnPieces,
+        TrojanKnight = AppSettings.TrojanKnight
+    };
+
+    /// <summary>«Играть с другом в Steam»: если Steam недоступен — объясняем, иначе настройки партии.</summary>
+    private void OpenSteamSetup()
+    {
+        SteamService steam = SteamService.Instance;
+        if (steam == null || !steam.Ready)
+        {
+            mWaitTitle.text = "Steam недоступен";
+            mWaitText.text = (steam?.InitError ?? "Steam не запущен")
+                             + "\n\nЗапусти Steam, войди в аккаунт и перезапусти игру.\nА пока можно играть по IP.";
+            mWaitStatus.text = "";
+            mWaitAction.gameObject.SetActive(false);
+            Show(Screen.Waiting);
+            return;
+        }
+        mHostViaSteam = true;
+        mHostTitle.text = "Игра с другом в Steam";
+        Show(Screen.HostSetup);
+    }
+
+    /// <summary>Хост: создать лобби и пригласить друга.</summary>
+    private void StartSteamHosting()
+    {
+        AppSettings.Save();
+        mPendingNet?.Close();
+        SteamLobbyTransport transport = SteamService.Instance.HostLobby();
+        mPendingNet = NetMatch.Create(NetRole.Host, transport, TemplateFromSettings());
+
+        mWaitTitle.text = "Пригласи друга";
+        mWaitText.text = "Открылось окно Steam: выбери друга и нажми «Пригласить».\n\n"
+                         + "Друг примет приглашение в Steam — игра у него запустится и подключится сама.\n"
+                         + "Окно не открылось? Нажми «Пригласить» ниже или Shift+Tab.\n\n"
+                         + "(Оверлей Steam работает в собранной игре; в редакторе Unity его обычно нет.)";
+        mWaitStatus.text = "Создаём лобби…";
+        mWaitAction.gameObject.SetActive(true);
+        Show(Screen.Waiting);
+    }
+
+    /// <summary>Гость: друг пригласил, мы приняли — входим в его лобби.</summary>
+    private void JoinSteamLobby(Steamworks.CSteamID lobby)
+    {
+        // Посреди своей партии чужое приглашение не принимаем.
+        if (mGame.State != null && !mGame.State.IsOver)
+        {
+            mGame.ShowBanner("Приглашение в Steam: сначала закончи текущую партию");
+            return;
+        }
+        mGame.StopGame();
+        mPendingNet?.Close();
+        SteamLobbyTransport transport = SteamService.Instance.JoinLobby(lobby);
+        mPendingNet = NetMatch.Create(NetRole.Guest, transport);
+
+        mWaitTitle.text = "Подключаемся к другу…";
+        mWaitText.text = "Входим в лобби Steam.";
+        mWaitStatus.text = "";
+        mWaitAction.gameObject.SetActive(false);
+        Show(Screen.Waiting);
+    }
+
+    #endregion
 
     private void PollPendingNet()
     {
@@ -292,7 +388,13 @@ public class MenuManager : MonoBehaviour
             return;
 
         if (mPendingNet.Transport.Status == TransportStatus.Connected && mWaitStatus != null)
-            mWaitStatus.text = "Соединение есть, договариваемся о партии…";
+        {
+            string friend = mPendingNet.Transport is SteamLobbyTransport st
+                ? SteamService.Instance.FriendName(st.Opponent) : "";
+            mWaitStatus.text = (friend.Length > 0 ? friend + " на связи" : "Соединение есть") + ", договариваемся о партии…";
+        }
+        else if (mPendingNet.Transport is SteamLobbyTransport { IsHost: true } host && host.Lobby.IsValid() && mWaitStatus != null)
+            mWaitStatus.text = "Лобби создано, ждём друга…";
 
         foreach (NetEvent e in mPendingNet.Poll())
         {
@@ -378,10 +480,6 @@ public class MenuManager : MonoBehaviour
     {
         var root = ScreenRoot("Main", UiKit.Background);
 
-        // Декор: большие призраки по бокам.
-        Decor(root, "Pieces/w_ghost", new Vector2(-560, -40), 420, 8f, 0.18f);
-        Decor(root, "Pieces/b_ghost", new Vector2(560, -40), 420, -8f, 0.45f);
-
         Title(root, "ШАХМАТЫ 2.0", 96, new Vector2(0, -110));
         var sub = UiKit.CreateText("Subtitle", root, "фигуры не умирают — они слабеют", 30, new Color(0.8f, 0.85f, 0.8f, 1f));
         Place(sub.transform, new Vector2(0.5f, 1), new Vector2(0, -200));
@@ -459,7 +557,13 @@ public class MenuManager : MonoBehaviour
         Place(col, new Vector2(0.5f, 0.5f), new Vector2(0, 10));
         var size = new Vector2(560, BigButtonHeight);
         UiKit.CreatePlateButton(col, "За одним компьютером", size, () => Show(Screen.LocalSetup), 34);
-        UiKit.CreatePlateButton(col, "Создать игру по сети", size, () => Show(Screen.HostSetup), 34);
+        UiKit.CreatePlateButton(col, "Играть с другом в Steam", size, OpenSteamSetup, 34);
+        UiKit.CreatePlateButton(col, "Создать игру по сети", size, () =>
+        {
+            mHostViaSteam = false;
+            mHostTitle.text = "Создать игру по сети";
+            Show(Screen.HostSetup);
+        }, 34);
         UiKit.CreatePlateButton(col, "Подключиться по IP", size, () =>
         {
             mAddressField.text = AppSettings.LastAddress;
@@ -468,7 +572,7 @@ public class MenuManager : MonoBehaviour
         }, 34);
 
         var info = UiKit.CreateText("Info", col,
-            "По сети — в локальной сети, через Radmin VPN или по интернету.\nИгра с друзьями через Steam появится позже.",
+            "Через Steam — приглашение другу, ничего настраивать не нужно.\nПо IP — в локальной сети, через Radmin VPN или по интернету.",
             24, new Color(0.75f, 0.8f, 0.75f, 1f));
         ((RectTransform)info.transform).sizeDelta = new Vector2(1000, 80);
 
@@ -480,7 +584,7 @@ public class MenuManager : MonoBehaviour
     private GameObject BuildHostSetup()
     {
         var root = ScreenRoot("HostSetup", UiKit.Background);
-        Title(root, "Создать игру по сети", 64, new Vector2(0, -60));
+        mHostTitle = Title(root, "Создать игру по сети", 64, new Vector2(0, -60));
 
         var col = UiKit.CreateColumn("Content", root, 10);
         Place(col, new Vector2(0.5f, 0.5f), new Vector2(0, 20));
@@ -547,6 +651,10 @@ public class MenuManager : MonoBehaviour
 
         mWaitStatus = UiKit.CreateText("Status", col, "", 26, new Color32(255, 200, 120, 255));
         ((RectTransform)mWaitStatus.transform).sizeDelta = new Vector2(1100, 40);
+
+        mWaitAction = UiKit.CreatePlateButton(col, "Пригласить", new Vector2(360, 72),
+            () => SteamService.Instance?.OpenInviteDialog(), 34);
+        mWaitAction.gameObject.SetActive(false);
 
         BottomBar(root, CancelNet, null, null);
         return root.gameObject;
@@ -681,6 +789,8 @@ public class MenuManager : MonoBehaviour
     {
         var img = UiKit.CreatePanel(name, mCanvas.transform, background);
         img.raycastTarget = true; // перекрывает доску — клики не проходят насквозь
+        if (background == UiKit.Background)
+            UiKit.CreateBackdrop(img.transform, "bg_menu");
         return (RectTransform)img.transform;
     }
 
@@ -761,19 +871,6 @@ public class MenuManager : MonoBehaviour
         mSoundButtons.Add(UiKit.CreateImageButton(row, "sound", 72, ToggleSound));
         mMusicButtons.Add(UiKit.CreateImageButton(row, "music", 72, ToggleMusic));
         RefreshAudioIcons();
-    }
-
-    private static void Decor(Transform parent, string sprite, Vector2 offset, float height, float angle, float alpha)
-    {
-        var rt = UiKit.CreateUi("Decor", parent, typeof(Image));
-        var img = rt.GetComponent<Image>();
-        img.sprite = UiKit.LoadSprite(sprite);
-        img.preserveAspect = true;
-        img.raycastTarget = false;
-        img.color = new Color(1, 1, 1, alpha);
-        rt.sizeDelta = new Vector2(height, height);
-        rt.anchoredPosition = offset;
-        rt.localRotation = Quaternion.Euler(0, 0, angle);
     }
 
     private static void Place(Transform t, Vector2 anchor, Vector2 offset)

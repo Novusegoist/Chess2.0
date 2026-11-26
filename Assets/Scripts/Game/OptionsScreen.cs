@@ -25,6 +25,7 @@ public class OptionsScreen
     {
         var rootImage = UiKit.CreatePanel("Options", canvas, UiKit.Background);
         rootImage.raycastTarget = true;
+        UiKit.CreateBackdrop(rootImage.transform, "bg_menu");
         var root = (RectTransform)rootImage.transform;
         Root = root.gameObject;
 

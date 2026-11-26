@@ -122,7 +122,8 @@ namespace Chess2.Core.Net
         public const int MaxChatLength = 120;
 
         public NetRole Role { get; }
-        public TcpTransport Transport { get; } = new TcpTransport();
+        /// <summary>Соединение: TCP (игра по IP) или Steam-лобби.</summary>
+        public INetTransport Transport { get; }
 
         /// <summary>Настройки текущей партии (у гостя — после первого SETUP).</summary>
         public NetSetup Setup { get; private set; }
@@ -163,26 +164,34 @@ namespace Chess2.Core.Net
 
         private double Now => _clock.Elapsed.TotalSeconds;
 
-        private NetMatch(NetRole role, NetSetup template)
+        private NetMatch(NetRole role, NetSetup template, INetTransport transport)
         {
             Role = role;
             _template = template;
+            Transport = transport;
         }
+
+        /// <summary>
+        /// Партия поверх готового соединения (например, Steam-лобби).
+        /// Хосту нужен template — настройки из меню; гостю — null.
+        /// </summary>
+        public static NetMatch Create(NetRole role, INetTransport transport, NetSetup template = null) =>
+            new NetMatch(role, template, transport);
 
         /// <summary>Создать игру и ждать соперника. template — настройки, выбранные в меню.</summary>
         public static NetMatch Host(int port, NetSetup template)
         {
-            var m = new NetMatch(NetRole.Host, template);
-            m.Transport.Host(port);
-            return m;
+            var tcp = new TcpTransport();
+            tcp.Host(port);
+            return new NetMatch(NetRole.Host, template, tcp);
         }
 
         /// <summary>Подключиться к игре по адресу.</summary>
         public static NetMatch Join(string host, int port)
         {
-            var m = new NetMatch(NetRole.Guest, null);
-            m.Transport.Connect(host, port);
-            return m;
+            var tcp = new TcpTransport();
+            tcp.Connect(host, port);
+            return new NetMatch(NetRole.Guest, null, tcp);
         }
 
         /// <summary>Забрать все новые события. Вызывать каждый кадр из основного потока.</summary>

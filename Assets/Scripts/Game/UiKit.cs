@@ -12,7 +12,7 @@ public static class UiKit
 {
     public static readonly Color TextDark = new Color32(31, 79, 99, 255);
     public static readonly Color TextLight = new Color32(235, 235, 225, 255);
-    public static readonly Color Background = new Color32(38, 44, 40, 255);
+    public static readonly Color Background = new Color32(18, 38, 50, 255); // под фоны в цветах кнопок
 
     private static readonly Dictionary<string, Sprite> sSprites = new Dictionary<string, Sprite>();
     private static Font sFont;
@@ -84,6 +84,29 @@ public static class UiKit
         rt.anchorMax = Vector2.one;
         rt.offsetMin = rt.offsetMax = Vector2.zero;
         return rt;
+    }
+
+    /// <summary>
+    /// Картинка-фон из Resources/UI/Backgrounds: заполняет весь родитель без искажений
+    /// (лишнее по краям обрезается), клики не перехватывает.
+    /// </summary>
+    public static Image CreateBackdrop(Transform parent, string name)
+    {
+        Sprite sprite = LoadSprite("UI/Backgrounds/" + name);
+        if (sprite == null)
+            return null;
+
+        // Маска по размеру родителя, внутри — картинка с сохранением пропорций «на вырост».
+        var clip = Stretch(CreateUi("Backdrop", parent, typeof(RectMask2D)));
+        clip.SetAsFirstSibling();
+        var rt = CreateUi("Image", clip, typeof(Image), typeof(AspectRatioFitter));
+        var img = rt.GetComponent<Image>();
+        img.sprite = sprite;
+        img.raycastTarget = false;
+        var fitter = rt.GetComponent<AspectRatioFitter>();
+        fitter.aspectMode = AspectRatioFitter.AspectMode.EnvelopeParent;
+        fitter.aspectRatio = sprite.rect.width / sprite.rect.height;
+        return img;
     }
 
     public static Image CreatePanel(string name, Transform parent, Color color)

@@ -57,6 +57,7 @@ internal static class Program
         Run("Сеть: подключение к закрытому порту сообщает об ошибке", NetConnectFails);
         Run("Сеть: чат (кириллица, переносы, длина) и эмодзи", NetChat);
         Run("Сеть: пульс — пинг измеряется, молчание соперника = потеря связи", NetHeartbeat);
+        Run("Сеть: партия поверх любого соединения (как будет со Steam)", NetCustomTransport);
         Run("Бот: мат в 1 ход", BotMateInOne);
         Run("Бот: добивает последнюю фигуру соперника", BotFinishes);
         Run("Бот: бьёт незащищённого ферзя", BotHitsQueen);
@@ -785,7 +786,7 @@ internal static class Program
     {
         var template = new Chess2.Core.Net.NetSetup { HostColorChoice = hostColor, Mode = 0, TimeMinutes = 10 };
         var host = Chess2.Core.Net.NetMatch.Host(0, template);
-        var guest = Chess2.Core.Net.NetMatch.Join("127.0.0.1", host.Transport.ListenPort);
+        var guest = Chess2.Core.Net.NetMatch.Join("127.0.0.1", ((Chess2.Core.Net.TcpTransport)host.Transport).ListenPort);
         var he = new List<Chess2.Core.Net.NetEvent>();
         var ge = new List<Chess2.Core.Net.NetEvent>();
         bool ok = Pump(host, he, guest, ge, () =>
@@ -931,6 +932,61 @@ internal static class Program
             host.Close();
             guest.Close();
         }
+    }
+
+    /// <summary>Соединение «в памяти»: две очереди. Так же устроен Steam-транспорт — сообщения приходят снаружи.</summary>
+    private sealed class MemoryTransport : Chess2.Core.Net.INetTransport
+    {
+        public MemoryTransport Other;
+        public readonly Queue<string> Inbox = new Queue<string>();
+        public Chess2.Core.Net.TransportStatus Status { get; set; } = Chess2.Core.Net.TransportStatus.Connected;
+        public string Error => null;
+        public bool Send(string line)
+        {
+            if (Status != Chess2.Core.Net.TransportStatus.Connected) return false;
+            Other.Inbox.Enqueue(line);
+            return true;
+        }
+        public bool TryReceive(out string line)
+        {
+            if (Inbox.Count > 0) { line = Inbox.Dequeue(); return true; }
+            line = null;
+            return false;
+        }
+        public void Close()
+        {
+            Status = Chess2.Core.Net.TransportStatus.Closed;
+            Other.Status = Chess2.Core.Net.TransportStatus.Closed;
+        }
+        public void Dispose() => Close();
+    }
+
+    private static void NetCustomTransport()
+    {
+        var a = new MemoryTransport();
+        var b = new MemoryTransport { Other = a };
+        a.Other = b;
+        var host = Chess2.Core.Net.NetMatch.Create(Chess2.Core.Net.NetRole.Host, a,
+            new Chess2.Core.Net.NetSetup { HostColorChoice = 0, TimeMinutes = 15 });
+        var guest = Chess2.Core.Net.NetMatch.Create(Chess2.Core.Net.NetRole.Guest, b);
+        var he = new List<Chess2.Core.Net.NetEvent>();
+        var ge = new List<Chess2.Core.Net.NetEvent>();
+        True(Pump(host, he, guest, ge, () =>
+            he.Any(e => e.Kind == Chess2.Core.Net.NetEventKind.GameStarted) &&
+            ge.Any(e => e.Kind == Chess2.Core.Net.NetEventKind.GameStarted)), "партия началась");
+        Eq(15, guest.Setup.TimeMinutes, "настройки дошли");
+
+        var hs = GameState.CreateStandard(host.Setup.BuildRules(), host.Setup.Seed);
+        var gs = GameState.CreateStandard(guest.Setup.BuildRules(), guest.Setup.Seed);
+        True(Rules.TryMakeMove(hs, "e2", "e4"), "ход хоста");
+        host.SendMove(hs.LastMove.Value, 899);
+        ge.Clear();
+        True(Pump(host, he, guest, ge, () => ge.Any(e => e.Kind == Chess2.Core.Net.NetEventKind.RemoteMove)), "ход дошёл");
+        True(Rules.TryMakeMove(gs, ge.First(e => e.Kind == Chess2.Core.Net.NetEventKind.RemoteMove).Move), "ход принят");
+        Eq(Snapshot(hs), Snapshot(gs), "позиции совпадают");
+
+        b.Close();
+        True(Pump(host, he, guest, ge, () => he.Any(e => e.Kind == Chess2.Core.Net.NetEventKind.Disconnected)), "закрытие замечено");
     }
 
     private static void NetConnectFails()

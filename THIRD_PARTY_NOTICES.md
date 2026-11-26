@@ -55,3 +55,12 @@
 | music_01_contemplation.mp3 | Contemplation | joth | <https://opengameart.org/content/contemplation-0> |
 | music_02_chill_lofi.ogg | Chill lofi inspired | omfgdude | <https://opengameart.org/content/chill-lofi-inspired> |
 | music_03_another_august.mp3 | Another August | cynicmusic | <https://opengameart.org/content/another-august> |
+
+## Steamworks.NET
+
+Пакет `com.rlabrecque.steamworks.net` подключается через `Packages/manifest.json`.
+
+- Автор: Riley Labrecque, <https://github.com/rlabrecque/Steamworks.NET>
+- Лицензия: MIT
+- Вместе с ним поставляется библиотека Steamworks SDK от Valve (`steam_api64.dll`), на которую
+  распространяется Steamworks SDK Access Agreement.

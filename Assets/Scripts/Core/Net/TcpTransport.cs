@@ -22,7 +22,7 @@ namespace Chess2.Core.Net
     /// Чтение идёт в фоновом потоке, входящие строки складываются в очередь —
     /// забирать их нужно из основного потока через TryReceive (Unity не любит работу из чужих потоков).
     /// </summary>
-    public sealed class TcpTransport : IDisposable
+    public sealed class TcpTransport : INetTransport
     {
         public const int DefaultPort = 7777;
 

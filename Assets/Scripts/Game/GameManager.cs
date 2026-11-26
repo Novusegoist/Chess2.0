@@ -881,7 +881,9 @@ public class GameManager : MonoBehaviour
         Canvas canvas = UiKit.CreateCanvas("Chess2 Board Canvas", transform, 0);
         mRoot = canvas.gameObject;
 
-        UiKit.CreatePanel("Background", canvas.transform, UiKit.Background).raycastTarget = false;
+        Image background = UiKit.CreatePanel("Background", canvas.transform, UiKit.Background);
+        background.raycastTarget = false;
+        UiKit.CreateBackdrop(background.transform, "bg_game");
 
         // Доска 800x800 по центру, сверху и снизу по 50 под надписи.
         var boardRt = UiKit.CreateUi("Board", canvas.transform, typeof(Board));
