@@ -216,7 +216,7 @@ public class OptionsScreen
         AddToggle(col, "Звуки", () => AppSettings.Sound, v => AppSettings.Sound = v, "Вкл", "Выкл");
         AddToggle(col, "Музыка", () => AppSettings.Music, v => AppSettings.Music = v, "Вкл", "Выкл");
 
-        Note(col, "Звуков и музыки в игре пока нет — настройки сохранятся на будущее.");
+        Note(col, "Звуки — Kenney (kenney.nl). Музыка — joth, omfgdude, cynicmusic (OpenGameArt). Всё под CC0.");
         return col.gameObject;
     }
 

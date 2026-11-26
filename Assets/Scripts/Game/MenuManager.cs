@@ -70,6 +70,8 @@ public class MenuManager : MonoBehaviour
             game = new GameObject("Chess2").AddComponent<GameManager>();
         if (game.GetComponent<AppPerformance>() == null)
             game.gameObject.AddComponent<AppPerformance>();
+        if (game.GetComponent<SoundManager>() == null)
+            game.gameObject.AddComponent<SoundManager>();
         if (game.GetComponent<MenuManager>() == null)
             game.gameObject.AddComponent<MenuManager>();
     }

@@ -25,7 +25,11 @@ public class MenuButton : MonoBehaviour, IPointerEnterHandler, IPointerExitHandl
         nav.mode = Navigation.Mode.None;
         mButton.navigation = nav;
         if (onClick != null)
-            mButton.onClick.AddListener(() => onClick());
+            mButton.onClick.AddListener(() =>
+            {
+                SoundManager.Play("button", 0.6f, 0.02f);
+                onClick();
+            });
         Refresh();
     }
 

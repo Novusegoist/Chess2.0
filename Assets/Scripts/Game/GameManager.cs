@@ -222,6 +222,7 @@ public class GameManager : MonoBehaviour
         mPieceManager.Clear();
         mPieceManager.Sync(State, null);
         UpdateStatus();
+        SoundManager.Play("start", 0.7f, 0f);
         MaybeStartBot();
     }
 
@@ -261,11 +262,87 @@ public class GameManager : MonoBehaviour
             }
         }
 
+        PlayMoveSound(State.LastMove ?? move, mEffects);
+
         if (State.IsOver)
-            GameEnded?.Invoke(State);
+            NotifyGameEnded();
         else
             MaybeStartBot();
         return true;
+    }
+
+    /// <summary>Один главный звук хода (самое яркое событие) и «шах» следом.</summary>
+    private void PlayMoveSound(Move move, List<MoveEffect> effects)
+    {
+        bool kingFell = false, exploded = false, empowered = false, removed = false, degraded = false,
+            promoted = false, embarked = false, disembarked = false;
+        foreach (MoveEffect e in effects)
+        {
+            switch (e.Kind)
+            {
+                case EffectKind.KingFell: kingFell = true; break;
+                case EffectKind.Exploded: exploded = true; break;
+                case EffectKind.Empowered: empowered = true; break;
+                case EffectKind.Removed: removed = true; break;
+                case EffectKind.Degraded: degraded = true; break;
+                case EffectKind.Promoted: promoted = true; break;
+                case EffectKind.Embarked: embarked = true; break;
+                case EffectKind.Disembarked:
+                case EffectKind.Ejected: disembarked = true; break;
+            }
+        }
+
+        if (kingFell)
+        {
+            SoundManager.Play("king_fall", 1f, 0f);
+            if (empowered)
+                SoundManager.PlayDelayed("empower", 0.6f);
+        }
+        else if (exploded)
+            SoundManager.Play("explode");
+        else if (move.Kind == MoveKind.Pierce)
+            SoundManager.Play("pierce");
+        else if (degraded)
+            SoundManager.Play("capture");
+        else if (removed)
+            SoundManager.Play("vanish");
+        else if (promoted)
+            SoundManager.Play("promote");
+        else if (embarked)
+            SoundManager.Play("embark");
+        else if (disembarked)
+            SoundManager.Play("disembark");
+        else if (move.IsDouble)
+            SoundManager.Play("double");
+        else if (move.Kind == MoveKind.Castle)
+            SoundManager.Play("castle");
+        else
+            SoundManager.Play("move");
+
+        // Пешка возродилась вместе с ударом/ходом — отдельный звук следом.
+        if (promoted && (degraded || removed || exploded))
+            SoundManager.PlayDelayed("promote", 0.25f);
+
+        if (!State.IsOver && State.Rules.WinCondition != WinCondition.Annihilation
+            && Chess2.Core.Rules.IsInCheck(State, State.SideToMove))
+            SoundManager.PlayDelayed("check", 0.2f);
+    }
+
+    /// <summary>Партия закончилась: звук победы/поражения/ничьей и событие для меню.</summary>
+    private void NotifyGameEnded()
+    {
+        if (State.Result == GameResult.Draw)
+            SoundManager.Play("draw", 1f, 0f);
+        else
+        {
+            Side winner = State.Result == GameResult.WhiteWins ? Side.White : Side.Black;
+            // Кто «мы»: в сети — своя сторона, против бота — человек; вдвоём — всегда радуемся.
+            bool weWon = Net != null ? winner == LocalSide
+                : PlayVsBot ? winner != BotSide
+                : true;
+            SoundManager.Play(weWon ? "win" : "lose", 1f, 0f);
+        }
+        GameEnded?.Invoke(State);
     }
 
     #endregion
@@ -279,7 +356,13 @@ public class GameManager : MonoBehaviour
             return;
 
         Side toMove = State.SideToMove;
-        if (!Clock.Tick(toMove, Time.unscaledDeltaTime))
+        double before = Clock.Remaining(toMove);
+        bool flag = Clock.Tick(toMove, Time.unscaledDeltaTime);
+        double after = Clock.Remaining(toMove);
+        bool ourClock = Net != null ? toMove == LocalSide : !(PlayVsBot && toMove == BotSide);
+        if (ourClock && after < 10 && after > 0 && (int)before != (int)after)
+            SoundManager.Play("clock_tick", 0.8f, 0f);
+        if (!flag)
             return;
 
         // В сети флаг объявляет только тот, у кого кончилось время, — иначе из-за задержки
@@ -301,7 +384,7 @@ public class GameManager : MonoBehaviour
         CancelBot();
         Deselect();
         UpdateStatus();
-        GameEnded?.Invoke(State);
+        NotifyGameEnded();
     }
 
     private void UpdateClockUi()
@@ -385,10 +468,12 @@ public class GameManager : MonoBehaviour
 
                 case NetEventKind.Chat:
                     mChat?.AddText("Соперник", false, e.Text);
+                    SoundManager.Play("chat", 0.8f, 0f);
                     break;
 
                 case NetEventKind.Emote:
                     mChat?.AddEmote("Соперник", false, e.Value, EmotePosition(LocalSide.Opponent()));
+                    SoundManager.Play("emote", 0.8f);
                     break;
 
                 case NetEventKind.Disconnected:
@@ -554,6 +639,7 @@ public class GameManager : MonoBehaviour
         mSelectedMoves = Chess2.Core.Rules.GetLegalMovesFrom(State, sq);
         // Без подсказок подсвечиваем только выбранную клетку — ходы игрок ищет сам.
         mBoard.ShowMoves(sq, AppSettings.ShowMoveHints ? mSelectedMoves : new List<Move>());
+        SoundManager.Play("select", 0.6f);
         UpdateSelectionUi();
     }
 

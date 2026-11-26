@@ -27,3 +27,31 @@
 | emoji_11 | 👻 | 1F47B |
 
 Авторство указано и в самой игре — строкой внизу главного меню.
+
+## Kenney — звуки
+
+Файлы в `Assets/Resources/Audio/Sfx` взяты из пакетов **Interface Sounds** и **Sci-Fi Sounds**
+(автор Kenney, <https://www.kenney.nl>). Источник — их страницы на OpenGameArt:
+<https://opengameart.org/content/interface-sounds>, <https://opengameart.org/content/sci-fi-sounds>.
+Лицензия CC0 1.0 (общественное достояние), указывать авторство не обязательно.
+
+| Файл в игре | Исходный файл |
+|---|---|
+| move_1, move_2, move_3, castle | drop_001, drop_002, drop_003, drop_004 |
+| select, button, clock_tick | click_005, click_001, click_002 |
+| vanish, promote, double | minimize_006, maximize_006, maximize_003 |
+| embark, disembark, start | close_002, open_002, open_001 |
+| check, chat, emote | bong_001, pluck_002, pluck_001 |
+| win, lose, draw | confirmation_004, error_006, question_001 |
+| capture, explode, empower | impactMetal_002, explosionCrunch_002, forceField_001 (Sci-Fi Sounds) |
+| king_fall, pierce | lowFrequency_explosion_000, laserSmall_001 (Sci-Fi Sounds) |
+
+## Музыка
+
+Файлы в `Assets/Resources/Audio/Music`, все с OpenGameArt под лицензией CC0 1.0:
+
+| Файл | Трек | Автор | Страница |
+|---|---|---|---|
+| music_01_contemplation.mp3 | Contemplation | joth | <https://opengameart.org/content/contemplation-0> |
+| music_02_chill_lofi.ogg | Chill lofi inspired | omfgdude | <https://opengameart.org/content/chill-lofi-inspired> |
+| music_03_another_august.mp3 | Another August | cynicmusic | <https://opengameart.org/content/another-august> |
