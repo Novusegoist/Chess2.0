@@ -29,6 +29,10 @@ public class GameManager : MonoBehaviour
     public BotDifficulty BotDifficulty { get; private set; } = BotDifficulty.Medium;
     public RuleSet Rules { get; private set; } = RuleSet.Default;
 
+    /// <summary>Шахматные часы партии (минуты на каждого; 0 — без контроля времени).</summary>
+    public ChessClock Clock { get; private set; } = new ChessClock(0);
+    public int TimeMinutes { get; private set; }
+
     /// <summary>Пока true — ходить нельзя, ход бота откладывается (открыто меню паузы).</summary>
     public bool Paused { get; set; }
 
@@ -50,6 +54,8 @@ public class GameManager : MonoBehaviour
     private CancellationTokenSource mBotCancel;
     private float mBotStartedAt;
     private bool mBuilt;
+    private ClockPanel mTopClock;
+    private ClockPanel mBottomClock;
 
     void Start()
     {
@@ -62,7 +68,9 @@ public class GameManager : MonoBehaviour
 
     void Update()
     {
+        TickClock();
         PollBot();
+        UpdateClockUi();
     }
 
     void OnDestroy()
@@ -73,9 +81,10 @@ public class GameManager : MonoBehaviour
     #region Партия
 
     /// <summary>Начать партию. vsBot = false — вдвоём за одним компьютером.</summary>
-    public void StartGame(bool vsBot, Side botSide, BotDifficulty difficulty, RuleSet rules)
+    public void StartGame(bool vsBot, Side botSide, BotDifficulty difficulty, RuleSet rules, int timeMinutes = 0)
     {
         EnsureBuilt();
+        TimeMinutes = timeMinutes;
         PlayVsBot = vsBot;
         BotSide = botSide;
         BotDifficulty = difficulty;
@@ -86,7 +95,7 @@ public class GameManager : MonoBehaviour
     }
 
     /// <summary>Та же партия заново (с теми же настройками).</summary>
-    public void Restart() => StartGame(PlayVsBot, BotSide, BotDifficulty, Rules);
+    public void Restart() => StartGame(PlayVsBot, BotSide, BotDifficulty, Rules, TimeMinutes);
 
     /// <summary>Убрать доску (выход в главное меню).</summary>
     public void StopGame()
@@ -107,6 +116,7 @@ public class GameManager : MonoBehaviour
     {
         CancelBot();
         State = GameState.CreateStandard(Rules);
+        Clock = new ChessClock(TimeMinutes);
 
         // Человек всегда снизу.
         mBoard.SetFlipped(PlayVsBot && BotSide == Side.White);
@@ -132,6 +142,10 @@ public class GameManager : MonoBehaviour
         if (!Chess2.Core.Rules.TryMakeMove(State, move, mEffects))
             return false;
 
+        Clock.OnMoveMade();
+        if (State.IsOver)
+            Clock.Stop();
+
         Deselect();
         mBoard.SetLastMove(State.LastMove);
         mPieceManager.Sync(State, mEffects);
@@ -155,6 +169,54 @@ public class GameManager : MonoBehaviour
 
     #endregion
 
+    #region Часы
+
+    private void TickClock()
+    {
+        if (State == null || State.IsOver || Paused || !Clock.Enabled)
+            return;
+
+        Side toMove = State.SideToMove;
+        if (!Clock.Tick(toMove, Time.unscaledDeltaTime))
+            return;
+
+        // Флаг упал: у того, чей ход, кончилось время.
+        Chess2.Core.Rules.EndGame(State, toMove, EndReason.Timeout);
+        CancelBot();
+        Deselect();
+        UpdateStatus();
+        GameEnded?.Invoke(State);
+    }
+
+    private void UpdateClockUi()
+    {
+        if (mTopClock == null)
+            return;
+
+        bool show = State != null && Clock.Enabled;
+        mTopClock.gameObject.SetActive(show);
+        mBottomClock.gameObject.SetActive(show);
+        if (!show)
+            return;
+
+        // Снизу — сторона, которая стоит внизу доски.
+        Side bottom = mBoard.Flipped ? Side.Black : Side.White;
+        Side top = bottom.Opponent();
+        bool ticking = Clock.Running && !State.IsOver;
+        mTopClock.Show(SideName(top), Clock.Remaining(top), ticking && State.SideToMove == top);
+        mBottomClock.Show(SideName(bottom), Clock.Remaining(bottom), ticking && State.SideToMove == bottom);
+    }
+
+    private string SideName(Side side)
+    {
+        string color = side == Side.White ? "Белые" : "Чёрные";
+        if (!PlayVsBot)
+            return color;
+        return side == BotSide ? $"Бот · {color.ToLowerInvariant()}" : $"Ты · {color.ToLowerInvariant()}";
+    }
+
+    #endregion
+
     #region Бот
 
     private void MaybeStartBot()
@@ -164,7 +226,14 @@ public class GameManager : MonoBehaviour
 
         // Бот думает над копией и в отдельном потоке — игра не подвисает.
         GameState snapshot = State.Clone();
-        var bot = new Bot(BotDifficulty);
+        var settings = BotSettings.For(BotDifficulty);
+        if (Clock.Enabled)
+        {
+            // Тратим не больше ~1/30 оставшегося времени на ход, чтобы не проиграть по флагу.
+            double left = Clock.Remaining(BotSide);
+            settings.TimeLimitMs = (int)Math.Min(settings.TimeLimitMs, Math.Max(100, left * 1000 / 30));
+        }
+        var bot = new Bot(settings);
         mBotCancel = new CancellationTokenSource();
         CancellationToken token = mBotCancel.Token;
         mBotStartedAt = Time.time;
@@ -182,7 +251,9 @@ public class GameManager : MonoBehaviour
     {
         if (mBotTask == null || !mBotTask.IsCompleted || Paused)
             return;
-        if (Time.time - mBotStartedAt < mBotMinThinkSeconds)
+        // Пауза «для вида» — только если времени хватает.
+        float minThink = Clock.Enabled && Clock.Remaining(BotSide) < 30 ? 0f : mBotMinThinkSeconds;
+        if (Time.time - mBotStartedAt < minThink)
             return;
 
         Task<Move?> task = mBotTask;
@@ -520,6 +591,10 @@ public class GameManager : MonoBehaviour
         var ert = (RectTransform)mExplodeButton.transform;
         ert.anchoredPosition = new Vector2(400 + 40 + 135, 0);
         mExplodeButton.gameObject.SetActive(false);
+
+        // Часы справа от доски: сверху — соперник, снизу — тот, кто внизу доски.
+        mTopClock = ClockPanel.Create(canvas.transform, new Vector2(400 + 40 + 115, 400 - 50));
+        mBottomClock = ClockPanel.Create(canvas.transform, new Vector2(400 + 40 + 115, -400 + 50));
 
         // Баннер поверх доски («Король пал!»). Не ловит клики.
         mBannerText = UiKit.CreateText("Banner", canvas.transform, "", 48, new Color32(255, 225, 255, 255));

@@ -35,6 +35,8 @@ public class MenuManager : MonoBehaviour
     private readonly List<MenuButton> mColorButtons = new List<MenuButton>();
     private readonly List<MenuButton> mBotModeButtons = new List<MenuButton>();
     private readonly List<MenuButton> mLocalModeButtons = new List<MenuButton>();
+    private readonly List<MenuButton> mBotTimeButtons = new List<MenuButton>();
+    private readonly List<MenuButton> mLocalTimeButtons = new List<MenuButton>();
     private Text mBotModeHint;
     private Text mLocalModeHint;
 
@@ -116,14 +118,14 @@ public class MenuManager : MonoBehaviour
         Side botSide = color == 0 ? Side.Black : Side.White;
 
         AppSettings.Save();
-        mGame.StartGame(true, botSide, AppSettings.Difficulty, AppSettings.BuildRules());
+        mGame.StartGame(true, botSide, AppSettings.Difficulty, AppSettings.BuildRules(), AppSettings.TimeMinutes);
         Show(Screen.None);
     }
 
     private void StartLocalGame()
     {
         AppSettings.Save();
-        mGame.StartGame(false, Side.Black, AppSettings.Difficulty, AppSettings.BuildRules());
+        mGame.StartGame(false, Side.Black, AppSettings.Difficulty, AppSettings.BuildRules(), AppSettings.TimeMinutes);
         Show(Screen.None);
     }
 
@@ -233,10 +235,10 @@ public class MenuManager : MonoBehaviour
     private GameObject BuildBotSetup()
     {
         var root = ScreenRoot("BotSetup", UiKit.Background);
-        Title(root, "Игра с ботом", 64, new Vector2(0, -70));
+        Title(root, "Игра с ботом", 64, new Vector2(0, -50));
 
-        var col = UiKit.CreateColumn("Content", root, 14);
-        Place(col, new Vector2(0.5f, 0.5f), new Vector2(0, 10));
+        var col = UiKit.CreateColumn("Content", root, 8);
+        Place(col, new Vector2(0.5f, 0.5f), new Vector2(0, 20));
 
         Label(col, "Сложность");
         var row = UiKit.CreateRow("Difficulty", col, 14);
@@ -264,6 +266,9 @@ public class MenuManager : MonoBehaviour
             }));
         }
 
+        Label(col, "Время на партию");
+        TimeRow(col, mBotTimeButtons);
+
         Label(col, "Режим");
         mBotModeHint = ModeRow(col, mBotModeButtons);
 
@@ -283,6 +288,9 @@ public class MenuManager : MonoBehaviour
             "Пока — вдвоём за одним компьютером, ходите по очереди.\nОнлайн и игра с друзьями в Steam появятся позже.",
             28, UiKit.TextLight);
         ((RectTransform)info.transform).sizeDelta = new Vector2(1000, 90);
+
+        Label(col, "Время на партию");
+        TimeRow(col, mLocalTimeButtons);
 
         Label(col, "Режим");
         mLocalModeHint = ModeRow(col, mLocalModeButtons);
@@ -380,6 +388,14 @@ public class MenuManager : MonoBehaviour
 
         RefreshModeRow(mBotModeButtons, mBotModeHint);
         RefreshModeRow(mLocalModeButtons, mLocalModeHint);
+
+        int time = System.Array.IndexOf(AppSettings.TimeOptions, AppSettings.TimeMinutes);
+        if (time < 0)
+            time = 0;
+        for (int i = 0; i < mBotTimeButtons.Count; i++)
+            mBotTimeButtons[i].SetSelected(i == time);
+        for (int i = 0; i < mLocalTimeButtons.Count; i++)
+            mLocalTimeButtons[i].SetSelected(i == time);
     }
 
     private static void RefreshModeRow(List<MenuButton> buttons, Text hint)
@@ -450,6 +466,21 @@ public class MenuManager : MonoBehaviour
     {
         var t = UiKit.CreateText("Label " + text, parent, text, 30, new Color(0.85f, 0.9f, 0.85f, 1f));
         ((RectTransform)t.transform).sizeDelta = new Vector2(600, 44);
+    }
+
+    private void TimeRow(Transform parent, List<MenuButton> into)
+    {
+        var row = UiKit.CreateRow("Time", parent, 14);
+        foreach (int minutes in AppSettings.TimeOptions)
+        {
+            int m = minutes;
+            string label = m == 0 ? "Без времени" : m + " мин";
+            into.Add(UiKit.CreatePlateButton(row, label, new Vector2(m == 0 ? 250 : 170, 60), () =>
+            {
+                AppSettings.TimeMinutes = m;
+                RefreshSetup();
+            }));
+        }
     }
 
     private Text ModeRow(Transform parent, List<MenuButton> into)

@@ -49,6 +49,9 @@ internal static class Program
         Run("«Шахматы 2.0»: армия без короля побеждает матом второму королю", KingFallSecondMate);
         Run("«Шахматы 2.0»: армия без короля проигрывает, когда фигур не осталось", KingFallAnnihilation);
         Run("«Шахматы 2.0»: способности только у загоревшихся фигур", KingFallAbilitiesOnlyEmpowered);
+        Run("Часы: стартуют после первого хода, тикают у того, чей ход", ClockBasics);
+        Run("Часы: флаг падает ровно на нуле, без контроля времени не тикают", ClockFlag);
+        Run("Часы: формат времени", ClockFormat);
         Run("Бот: мат в 1 ход", BotMateInOne);
         Run("Бот: добивает последнюю фигуру соперника", BotFinishes);
         Run("Бот: бьёт незащищённого ферзя", BotHitsQueen);
@@ -714,6 +717,44 @@ internal static class Program
         Eq(plain + 8, Rules.GetLegalMovesFrom(s, Sq.Parse("d4")).Count, "загоревшийся ферзь ходит и как конь");
         True(Rules.GetLegalMoves(s).Any(m => m.ToString() == "h1*h7"), "загоревшаяся ладья пробивает");
         True(Rules.GetLegalMoves(s).Any(m => m.ToString() == "a1!"), "загоревшийся конь может взорваться");
+    }
+
+    private static void ClockBasics()
+    {
+        var c = new ChessClock(10);
+        True(c.Enabled, "включены");
+        True(!c.Tick(Side.White, 30), "до первого хода не тикают");
+        Eq(600.0, c.WhiteSeconds, "белые 10:00");
+        c.OnMoveMade();
+        True(!c.Tick(Side.Black, 12.5), "тикают чёрные");
+        Eq(587.5, c.BlackSeconds, "чёрные потратили 12.5 с");
+        Eq(600.0, c.WhiteSeconds, "белые не тратили");
+        True(!c.Tick(Side.White, 100), "тикают белые");
+        Eq(500.0, c.WhiteSeconds, "белые потратили 100 с");
+    }
+
+    private static void ClockFlag()
+    {
+        var c = new ChessClock(10);
+        c.OnMoveMade();
+        True(!c.Tick(Side.Black, 599.9), "ещё есть время");
+        True(c.Tick(Side.Black, 0.2), "флаг упал");
+        Eq(0.0, c.BlackSeconds, "не уходит в минус");
+        True(!c.Running, "часы остановились");
+        True(!c.Tick(Side.Black, 1), "после флага не тикают");
+
+        var off = new ChessClock(0);
+        off.OnMoveMade();
+        True(!off.Enabled && !off.Tick(Side.White, 1e6), "без контроля времени");
+    }
+
+    private static void ClockFormat()
+    {
+        Eq("10:00", ChessClock.Format(600), "10 минут");
+        Eq("1:05", ChessClock.Format(64.2), "округление вверх");
+        Eq("0:10", ChessClock.Format(10), "ровно 10 секунд");
+        Eq("0:09.9", ChessClock.Format(9.95), "десятые");
+        Eq("0:00.0", ChessClock.Format(-1), "ноль");
     }
 
     private static string Snapshot(GameState s)

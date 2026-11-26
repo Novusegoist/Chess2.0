@@ -31,6 +31,16 @@ public static class AppSettings
         set => PlayerPrefs.SetInt(Prefix + "color", value);
     }
 
+    /// <summary>Время на партию для каждого игрока, в минутах. 0 — без контроля времени.</summary>
+    public static int TimeMinutes
+    {
+        get => PlayerPrefs.GetInt(Prefix + "time", 0);
+        set => PlayerPrefs.SetInt(Prefix + "time", value);
+    }
+
+    /// <summary>Варианты времени, которые предлагает меню.</summary>
+    public static readonly int[] TimeOptions = { 0, 10, 15, 20 };
+
     /// <summary>0 — «Шахматы 2.0» (основной), 1 — «Хаос» (все способности сразу, король слабеет).</summary>
     public static int Mode
     {
