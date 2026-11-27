@@ -19,7 +19,7 @@ using UnityEngine.InputSystem;
 [RequireComponent(typeof(GameManager))]
 public class MenuManager : MonoBehaviour
 {
-    private enum Screen { None, Main, BotSetup, Players, LocalSetup, HostSetup, Join, Waiting, Options, Pause, GameOver, Lessons }
+    private enum Screen { None, Main, BotSetup, Players, LocalSetup, HostSetup, Join, Waiting, Options, Pause, GameOver, Lessons, Stats }
 
     private const float BigButtonHeight = 84f;
 
@@ -34,7 +34,11 @@ public class MenuManager : MonoBehaviour
     private MenuButton mAgainButton;
     private MenuButton mRestartButton;
     private MenuButton mResignButton;
-    private MenuButton mContinueButton;   // «Продолжить» в главном меню — есть сохранённая партия
+    private MenuButton mContinueButton;
+    private readonly List<Text> mStatsCells = new List<Text>();   // 6 строк × 3 числа
+    private Text mStatsSummary;
+    private MenuButton mStatsReset;
+    private bool mStatsResetArmed;                                 // «Сбросить» нажали один раз — ждём подтверждения   // «Продолжить» в главном меню — есть сохранённая партия
     private readonly List<MenuButton> mLessonButtons = new List<MenuButton>();
 
     // Сеть: подключение, пока партия ещё не началась (дальше соединением владеет GameManager).
@@ -138,6 +142,7 @@ public class MenuManager : MonoBehaviour
             case Screen.Options: CloseOptions(); break;
             case Screen.BotSetup:
             case Screen.Lessons:
+            case Screen.Stats:
             case Screen.Players: Show(Screen.Main); break;
             case Screen.LocalSetup:
             case Screen.HostSetup:
@@ -175,6 +180,8 @@ public class MenuManager : MonoBehaviour
         }
         if (screen == Screen.Lessons)
             RefreshLessons();
+        if (screen == Screen.Stats)
+            RefreshStats();
     }
 
     private void StartBotGame()
@@ -501,6 +508,7 @@ public class MenuManager : MonoBehaviour
         mScreens[Screen.Pause] = BuildPause();
         mScreens[Screen.GameOver] = BuildGameOver();
         mScreens[Screen.Lessons] = BuildLessons();
+        mScreens[Screen.Stats] = BuildStats();
     }
 
     /// <summary>Кнопка «Меню» поверх доски во время партии.</summary>
@@ -537,6 +545,10 @@ public class MenuManager : MonoBehaviour
             UiKit.CreateImageButton(col, "exit", BigButtonHeight, Quit);
 
         SoundToggles(root);
+
+        // «Статистика» — в левом верхнем углу (справа вверху — звук и музыка).
+        var stats = UiKit.CreatePlateButton(root, "Статистика", new Vector2(240, 64), () => Show(Screen.Stats), 28);
+        Place(stats.transform, new Vector2(0, 1), new Vector2(40 + 120, -64));
         return root.gameObject;
     }
 
@@ -741,6 +753,83 @@ public class MenuManager : MonoBehaviour
 
         BottomBar(root, () => Show(Screen.Main), null, null);
         return root.gameObject;
+    }
+
+    private GameObject BuildStats()
+    {
+        var root = ScreenRoot("Stats", UiKit.Background);
+        Title(root, "Статистика", 64, new Vector2(0, -50));
+
+        var table = UiKit.CreateColumn("Table", root, 6);
+        Place(table, new Vector2(0.5f, 1), new Vector2(0, -170));
+
+        string[] header = { "", "Победы", "Поражения", "Ничьи" };
+        string[] labels = { "Бот: новичок", "Бот: любитель", "Бот: сильный", "Бот: мастер", "По сети", "Вдвоём*" };
+        var light = new Color(0.82f, 0.86f, 0.9f, 1f);
+
+        RectTransform row = UiKit.CreateRow("Header", table, 0);
+        for (int c = 0; c < header.Length; c++)
+            StatsCell(row, header[c], c == 0 ? 320 : 200, 24, new Color32(255, 215, 106, 255));
+        for (int r = 0; r < labels.Length; r++)
+        {
+            row = UiKit.CreateRow("Row " + r, table, 0);
+            StatsCell(row, labels[r], 320, 28, light);
+            for (int c = 0; c < 3; c++)
+                mStatsCells.Add(StatsCell(row, "0", 200, 30, UiKit.TextLight));
+        }
+
+        mStatsSummary = UiKit.CreateText("Summary", root, "", 24, light);
+        ((RectTransform)mStatsSummary.transform).sizeDelta = new Vector2(1100, 120);
+        Place(mStatsSummary.transform, new Vector2(0.5f, 1), new Vector2(0, -560));
+
+        mStatsReset = UiKit.CreatePlateButton(root, "Сбросить", new Vector2(300, 64), ResetStats, 28);
+        var rrt = (RectTransform)mStatsReset.transform;
+        rrt.anchorMin = rrt.anchorMax = rrt.pivot = new Vector2(1, 0);
+        rrt.anchoredPosition = new Vector2(-60, 60);
+
+        BottomBar(root, () => Show(Screen.Main), null, null);
+        return root.gameObject;
+    }
+
+    private static Text StatsCell(Transform row, string text, float width, int size, Color color)
+    {
+        var t = UiKit.CreateText("Cell", row, text, size, color, width >= 300 ? TextAnchor.MiddleLeft : TextAnchor.MiddleCenter);
+        ((RectTransform)t.transform).sizeDelta = new Vector2(width, 46);
+        return t;
+    }
+
+    private void RefreshStats()
+    {
+        GameStats.Outcome[] cols = { GameStats.Outcome.Win, GameStats.Outcome.Loss, GameStats.Outcome.Draw };
+        for (int r = 0; r < GameStats.Rows; r++)
+            for (int c = 0; c < 3; c++)
+                mStatsCells[r * 3 + c].text = GameStats.Get(r, cols[c]).ToString();
+
+        int lessons = 0;
+        foreach (Lesson l in Tutorial.Lessons)
+            if (AppSettings.IsLessonDone(l.Id))
+                lessons++;
+        mStatsSummary.text =
+            $"Сыграно партий: {GameStats.TotalGames}   ·   Серия побед: {GameStats.CurrentStreak} (лучшая — {GameStats.BestStreak})\n"
+            + $"Королей повержено: {GameStats.KingsFelled}   ·   Уроков пройдено: {lessons} из {Tutorial.Lessons.Count}\n"
+            + "<size=19>* Вдвоём: победы белых / победы чёрных / ничьи. Серия — против бота и по сети.</size>";
+        mStatsSummary.supportRichText = true;
+
+        mStatsResetArmed = false;
+        mStatsReset.SetText("Сбросить");
+    }
+
+    /// <summary>Сброс — только со второго нажатия.</summary>
+    private void ResetStats()
+    {
+        if (!mStatsResetArmed)
+        {
+            mStatsResetArmed = true;
+            mStatsReset.SetText("Точно сбросить?");
+            return;
+        }
+        GameStats.Reset();
+        RefreshStats();
     }
 
     private GameObject BuildPause()

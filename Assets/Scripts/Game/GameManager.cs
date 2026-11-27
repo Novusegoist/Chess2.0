@@ -420,6 +420,10 @@ public class GameManager : MonoBehaviour
         {
             if (e.Kind == EffectKind.KingFell)
             {
+                // Пал король соперника — в статистику (против бота и по сети).
+                if (Lesson == null && (Net != null || PlayVsBot)
+                    && e.Side != (Net != null ? LocalSide : BotSide.Opponent()))
+                    GameStats.AddKingFelled();
                 ShowBanner(KingFallText(mEffects));
                 break;
             }
@@ -514,10 +518,32 @@ public class GameManager : MonoBehaviour
                 : true;
             SoundManager.Play(weWon ? "win" : "lose", 1f, 0f);
         }
+        RecordStats();
         GameEnded?.Invoke(State);
     }
 
     #endregion
+
+    /// <summary>Итог партии — в статистику (уроки не считаются).</summary>
+    private void RecordStats()
+    {
+        if (Lesson != null)
+            return;
+        int row = Net != null ? GameStats.NetRow
+            : PlayVsBot ? GameStats.BotRow(BotDifficulty)
+            : GameStats.LocalRow;
+        GameStats.Outcome outcome;
+        if (State.Result == GameResult.Draw)
+            outcome = GameStats.Outcome.Draw;
+        else
+        {
+            Side winner = State.Result == GameResult.WhiteWins ? Side.White : Side.Black;
+            // Вдвоём «победа» — это победа белых.
+            Side us = Net != null ? LocalSide : PlayVsBot ? BotSide.Opponent() : Side.White;
+            outcome = winner == us ? GameStats.Outcome.Win : GameStats.Outcome.Loss;
+        }
+        GameStats.Record(row, outcome);
+    }
 
     #region Обучение
 
