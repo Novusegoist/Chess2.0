@@ -10,6 +10,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Program.cs" />
+    <Compile Include="BotV1.cs" />
     <Compile Include="../../Assets/Scripts/Core/**/*.cs" />
   </ItemGroup>
 </Project>

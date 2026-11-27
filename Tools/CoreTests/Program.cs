@@ -11,6 +11,8 @@ internal static class Program
 
     private static int Main(string[] args)
     {
+        if (args.Length > 0 && args[0] == "versus")
+            return Versus(args.Length > 1 ? int.Parse(args[1]) : 20, args.Length > 2 ? int.Parse(args[2]) : 300);
         if (args.Length > 0 && args[0] == "arena")
             return Arena(args.Length > 1 ? int.Parse(args[1]) : 10);
 
@@ -1139,6 +1141,70 @@ internal static class Program
             }
         }
         return 0;
+    }
+
+    /// <summary>
+    /// Новый бот против старого (BotV1) с одинаковым временем на ход:
+    /// dotnet run -- versus [пар партий] [мс на ход]. Каждая пара — одно и то же случайное начало,
+    /// новый бот играет его и белыми, и чёрными.
+    /// </summary>
+    private static int Versus(int pairs, int ms)
+    {
+        foreach (var rules in new[] { RuleSet.Default, RuleSet.Chaos })
+        {
+            int win = 0, loss = 0, draw = 0;
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            for (int g = 0; g < pairs * 2; g++)
+            {
+                bool newWhite = g % 2 == 0;
+                var settings = new BotSettings { MaxDepth = 64, TimeLimitMs = ms, QuiescenceDepth = 8 };
+                var fresh = new Bot(settings, seed: 1);
+                var old = new Chess2.Core.V1.BotV1(settings, seed: 1);
+                var s = GameState.CreateStandard(rules, seed: 1000 + g / 2);
+
+                // Одинаковое случайное начало для обеих партий пары: 4 полухода.
+                var rnd = new Random(7000 + g / 2);
+                for (int i = 0; i < 4 && !s.IsOver; i++)
+                {
+                    var moves = Rules.GetLegalMoves(s);
+                    Rules.MakeMove(s, moves[rnd.Next(moves.Count)]);
+                }
+
+                while (!s.IsOver && s.Ply < 240)
+                {
+                    bool newTurn = (s.SideToMove == Side.White) == newWhite;
+                    Move? m = newTurn ? fresh.FindBestMove(s) : old.FindBestMove(s);
+                    if (m == null) break;
+                    Rules.MakeMove(s, m.Value);
+                }
+                GameResult result = s.Result;
+                if (result == GameResult.Ongoing)
+                {
+                    // Партия упёрлась в лимит — присуждаем по материалу (перевес от «ладьи без пешки»).
+                    int diff = Material(s, Side.White) - Material(s, Side.Black);
+                    result = diff >= 300 ? GameResult.WhiteWins : diff <= -300 ? GameResult.BlackWins : GameResult.Draw;
+                }
+                if (result == GameResult.Draw) draw++;
+                else if ((result == GameResult.WhiteWins) == newWhite) win++;
+                else loss++;
+            }
+            double score = (win + draw * 0.5) / (pairs * 2.0);
+            Console.WriteLine($"{rules.WinCondition}: новый {win} : {loss} старый, ничьих {draw}  "
+                              + $"(очки нового {score:P0}, {sw.Elapsed.TotalSeconds:0} с)");
+        }
+        return 0;
+    }
+
+    private static int Material(GameState s, Side side)
+    {
+        int[] value = { 0, 40, 100, 310, 330, 500, 950, 1000 }; // None, Ghost, Pawn, Knight, Bishop, Rook, Queen, King
+        int sum = 0;
+        for (int sq = 0; sq < 64; sq++)
+        {
+            if (!s.Cells[sq].IsEmpty && s.Cells[sq].Side == side) sum += value[(int)s.Cells[sq].Type];
+            if (!s.Cargo[sq].IsEmpty && s.Cargo[sq].Side == side) sum += value[(int)s.Cargo[sq].Type];
+        }
+        return sum;
     }
 
     // ---------- помощники ----------
