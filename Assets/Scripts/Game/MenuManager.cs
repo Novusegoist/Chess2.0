@@ -35,6 +35,7 @@ public class MenuManager : MonoBehaviour
     private MenuButton mRestartButton;
     private MenuButton mResignButton;
     private MenuButton mContinueButton;
+    private MenuButton mReviewButton;   // «Разбор партии» на экране конца партии
     private readonly List<Text> mStatsCells = new List<Text>();   // 6 строк × 3 числа
     private Text mStatsSummary;
     private MenuButton mStatsReset;
@@ -98,6 +99,7 @@ public class MenuManager : MonoBehaviour
         mGame.NetGameStarted += OnNetGameStarted;
         mGame.NetClosed += OnNetClosed;
         mGame.LessonMenuRequested += OpenLessons;
+        mGame.ReviewClosed += OnReviewClosed;
     }
 
     void Start()
@@ -125,6 +127,7 @@ public class MenuManager : MonoBehaviour
             mGame.NetGameStarted -= OnNetGameStarted;
             mGame.NetClosed -= OnNetClosed;
             mGame.LessonMenuRequested -= OpenLessons;
+            mGame.ReviewClosed -= OnReviewClosed;
         }
         mPendingNet?.Close();
         if (SteamService.Instance != null)
@@ -140,7 +143,12 @@ public class MenuManager : MonoBehaviour
 
         switch (mCurrent)
         {
-            case Screen.None: OpenPause(); break;
+            case Screen.None:
+                if (mGame.Reviewing)
+                    mGame.EndReview();
+                else
+                    OpenPause();
+                break;
             case Screen.Pause: ClosePause(); break;
             case Screen.Options: CloseOptions(); break;
             case Screen.BotSetup:
@@ -186,6 +194,8 @@ public class MenuManager : MonoBehaviour
             RefreshLessons();
         if (screen == Screen.Stats)
             RefreshStats();
+        if (screen == Screen.GameOver)
+            mReviewButton.gameObject.SetActive(mGame.CanReview);
         if (screen == Screen.Achievements)
             RefreshAchievements();
     }
@@ -274,6 +284,8 @@ public class MenuManager : MonoBehaviour
         mGameOverInfo.text = mGame.Net != null && mGame.Net.RemoteWantsRematch ? "Соперник предлагает реванш!" : "";
         StartCoroutine(ShowGameOverLater());
     }
+
+    private void OnReviewClosed() => Show(Screen.GameOver);
 
     private void PlayAgain()
     {
@@ -936,6 +948,12 @@ public class MenuManager : MonoBehaviour
         var col = UiKit.CreateColumn("Buttons", root, 22);
         Place(col, new Vector2(0.5f, 0.5f), new Vector2(0, -40));
         mAgainButton = UiKit.CreatePlateButton(col, "Ещё раз", new Vector2(361, BigButtonHeight), PlayAgain, 38);
+        mReviewButton = UiKit.CreatePlateButton(col, "Разбор партии", new Vector2(361, 72), () =>
+        {
+            mGame.StartReview();
+            if (mGame.Reviewing)
+                Show(Screen.None);
+        }, 32);
         UiKit.CreateImageButton(col, "menu", BigButtonHeight, ToMainMenu);
         // Можно закрыть окно и посмотреть на доску.
         UiKit.CreatePlateButton(col, "Посмотреть доску", new Vector2(361, 64), () => Show(Screen.None), 26);

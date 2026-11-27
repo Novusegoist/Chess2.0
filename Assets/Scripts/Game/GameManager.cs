@@ -73,6 +73,18 @@ public class GameManager : MonoBehaviour
     private readonly List<GameState> mHistory = new List<GameState>(); // позиции перед каждым ходом — для «Ход назад»
     private MenuButton mUndoButton;
     private MenuButton mHintButton;
+
+    // Разбор партии.
+    public bool Reviewing { get; private set; }
+    public event Action ReviewClosed;
+    private readonly List<GameState> mReviewPositions = new List<GameState>();
+    private MoveReview[] mReviews;
+    private int mReviewIndex;
+    private volatile int mAnalyzed;
+    private int mShownAnalyzed = -1;
+    private CancellationTokenSource mAnalysisCancel;
+    private ReviewPanel mReviewPanel;
+    private GameObject mReviewControls;
     private Task<Move?> mHintTask;
     private CancellationTokenSource mHintCancel;
     private List<Move> mSelectedMoves = new List<Move>();
@@ -110,6 +122,7 @@ public class GameManager : MonoBehaviour
         UpdateClockUi();
         UpdateConnectionUi();
         UpdateUndo();
+        UpdateReview();
     }
 
     /// <summary>Пинг в заголовке чата и предупреждение в статусе, если соперник давно молчит.</summary>
@@ -228,6 +241,7 @@ public class GameManager : MonoBehaviour
             Net = null;
         }
         CancelBot();
+        StopReview();
         Deselect();
         EndLesson();
         State = null;
@@ -242,6 +256,7 @@ public class GameManager : MonoBehaviour
 
     private void NewGame(SavedGame saved = null)
     {
+        StopReview();
         CancelBot();
         EndLesson();
         mHistory.Clear();
@@ -339,6 +354,216 @@ public class GameManager : MonoBehaviour
 #else
         return Input.GetKeyDown(KeyCode.Z) && (Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl));
 #endif
+    }
+
+    #endregion
+
+    #region Разбор партии
+
+    /// <summary>Разобрать можно законченную партию (с ботом, вдвоём или по сети), в которой были ходы.</summary>
+    public bool CanReview => State != null && State.IsOver && Lesson == null && mHistory.Count > 0 && !Reviewing;
+
+    /// <summary>
+    /// Начать разбор: ходы можно листать, а бот в фоне оценивает каждый ход
+    /// (лучший / неточность / ошибка / зевок) и советует, что было лучше.
+    /// </summary>
+    public void StartReview()
+    {
+        if (!CanReview)
+            return;
+        CancelBot();
+        mReviewPositions.Clear();
+        mReviewPositions.AddRange(mHistory);
+        mReviewPositions.Add(State.Clone());
+        int moves = mReviewPositions.Count - 1;
+        mReviews = new MoveReview[moves];
+        mAnalyzed = 0;
+        mShownAnalyzed = -1;
+        Reviewing = true;
+        mReviewIndex = moves;
+
+        // Анализ — в фоне, по ходу от начала партии. Позиции не меняются, их можно читать из потока.
+        var positions = mReviewPositions.ToArray();
+        MoveReview[] reviews = mReviews;
+        mAnalysisCancel = new CancellationTokenSource();
+        CancellationToken token = mAnalysisCancel.Token;
+        System.Action work = () =>
+        {
+            for (int i = 0; i < reviews.Length && !token.IsCancellationRequested; i++)
+            {
+                Move? played = positions[i + 1].LastMove;
+                if (played.HasValue)
+                    reviews[i] = GameAnalysis.Review(positions[i].Clone(), played.Value, null, token); // копия: поиск временно меняет позицию
+                mAnalyzed = i + 1;
+            }
+        };
+#if UNITY_WEBGL && !UNITY_EDITOR
+        work();
+#else
+        Task.Run(work);
+#endif
+
+        if (mChat != null)
+            mChat.gameObject.SetActive(false);
+        mReviewPanel.gameObject.SetActive(true);
+        mReviewControls.SetActive(true);
+        ShowReviewPosition();
+    }
+
+    /// <summary>Закончить разбор и вернуться к экрану конца партии.</summary>
+    public void EndReview()
+    {
+        if (!Reviewing)
+            return;
+        StopReview();
+        ReviewClosed?.Invoke();
+    }
+
+    private void StopReview()
+    {
+        if (!Reviewing)
+            return;
+        Reviewing = false;
+        mAnalysisCancel?.Cancel();
+        mAnalysisCancel = null;
+        mReviewPanel.gameObject.SetActive(false);
+        mReviewControls.SetActive(false);
+        if (mChat != null)
+            mChat.gameObject.SetActive(Net != null);
+        if (State != null)
+        {
+            mPieceManager.Clear();
+            mPieceManager.Sync(State, null);
+            mBoard.SetLastMove(AppSettings.ShowLastMove ? State.LastMove : null);
+        }
+        UpdateStatus();
+    }
+
+    private void ReviewGo(int index)
+    {
+        if (!Reviewing)
+            return;
+        index = Mathf.Clamp(index, 0, mReviewPositions.Count - 1);
+        if (index == mReviewIndex)
+            return;
+        mReviewIndex = index;
+        SoundManager.Play("select", 0.5f);
+        ShowReviewPosition();
+    }
+
+    /// <summary>К следующей ошибке или зевку (по кругу).</summary>
+    private void ReviewNextMistake()
+    {
+        int n = mReviews.Length;
+        for (int step = 1; step <= n; step++)
+        {
+            int i = (mReviewIndex - 1 + step) % n; // индекс хода; позиция после него — i + 1
+            MoveReview r = mReviews[i];
+            if (r != null && (r.Quality == MoveQuality.Mistake || r.Quality == MoveQuality.Blunder))
+            {
+                ReviewGo(i + 1);
+                return;
+            }
+        }
+        ShowBanner(mAnalyzed < n ? "Ошибок пока не найдено — анализ ещё идёт" : "Ошибок и зевков нет!", 2f);
+    }
+
+    private void ShowReviewPosition()
+    {
+        GameState pos = mReviewPositions[mReviewIndex];
+        Deselect();
+        mPieceManager.Clear();
+        mPieceManager.Sync(pos, null);
+        mBoard.SetLastMove(pos.LastMove);
+        RefreshReviewPanel();
+        UpdateStatus();
+    }
+
+    private void UpdateReview()
+    {
+        if (!Reviewing)
+            return;
+        if (mAnalyzed != mShownAnalyzed)
+            RefreshReviewPanel();
+        if (Platform.IsDesktop && !Paused)
+        {
+#if ENABLE_INPUT_SYSTEM
+            var kb = UnityEngine.InputSystem.Keyboard.current;
+            if (kb == null)
+                return;
+            if (kb.leftArrowKey.wasPressedThisFrame) ReviewGo(mReviewIndex - 1);
+            if (kb.rightArrowKey.wasPressedThisFrame) ReviewGo(mReviewIndex + 1);
+            if (kb.homeKey.wasPressedThisFrame) ReviewGo(0);
+            if (kb.endKey.wasPressedThisFrame) ReviewGo(mReviewPositions.Count - 1);
+#else
+            if (Input.GetKeyDown(KeyCode.LeftArrow)) ReviewGo(mReviewIndex - 1);
+            if (Input.GetKeyDown(KeyCode.RightArrow)) ReviewGo(mReviewIndex + 1);
+            if (Input.GetKeyDown(KeyCode.Home)) ReviewGo(0);
+            if (Input.GetKeyDown(KeyCode.End)) ReviewGo(mReviewPositions.Count - 1);
+#endif
+        }
+    }
+
+    private static string QualityText(MoveQuality q)
+    {
+        switch (q)
+        {
+            case MoveQuality.Best: return "<color=#6fd67c>лучший ход</color>";
+            case MoveQuality.Good: return "<color=#9fd6a8>хороший ход</color>";
+            case MoveQuality.Forced: return "<color=#9fb7c4>единственный ход</color>";
+            case MoveQuality.Inaccuracy: return "<color=#ffd76a>неточность</color>";
+            case MoveQuality.Mistake: return "<color=#ffa25a>ошибка</color>";
+            default: return "<color=#ff6b6b>зевок</color>";
+        }
+    }
+
+    private static string SideName(Side side, bool capital) =>
+        side == Side.White ? (capital ? "Белые" : "белые") : (capital ? "Чёрные" : "чёрные");
+
+    private void RefreshReviewPanel()
+    {
+        int total = mReviews.Length;
+        int analyzed = Mathf.Min(mAnalyzed, total);
+        mShownAnalyzed = mAnalyzed;
+
+        string move;
+        if (mReviewIndex == 0)
+            move = "Начальная позиция.\nЛистай ходы кнопками справа" + (Platform.IsDesktop ? " или стрелками ← →." : ".");
+        else
+        {
+            GameState before = mReviewPositions[mReviewIndex - 1];
+            Move played = mReviewPositions[mReviewIndex].LastMove ?? default;
+            MoveReview r = mReviews[mReviewIndex - 1];
+            move = $"<b>Ход {mReviewIndex}</b> ({SideName(before.SideToMove, false)}):\n{DescribeMove(before, played)}\n\n";
+            if (r == null)
+                move += "<color=#9fb7c4>бот ещё оценивает этот ход…</color>";
+            else
+            {
+                move += "Оценка: " + QualityText(r.Quality);
+                bool worse = r.Quality == MoveQuality.Inaccuracy || r.Quality == MoveQuality.Mistake
+                             || r.Quality == MoveQuality.Blunder || r.Quality == MoveQuality.Good;
+                if (worse && r.Best.HasValue)
+                    move += "\nЛучше было: " + DescribeMove(before, r.Best.Value);
+            }
+        }
+
+        var sb = new System.Text.StringBuilder();
+        sb.Append(analyzed < total ? $"Анализ: {analyzed} из {total} ходов…\n\n" : "Анализ готов.\n\n");
+        foreach (Side side in new[] { Side.White, Side.Black })
+        {
+            int inacc = 0, mist = 0, blund = 0;
+            for (int i = 0; i < total; i++)
+            {
+                MoveReview r = mReviews[i];
+                if (r == null || mReviewPositions[i].SideToMove != side)
+                    continue;
+                if (r.Quality == MoveQuality.Inaccuracy) inacc++;
+                else if (r.Quality == MoveQuality.Mistake) mist++;
+                else if (r.Quality == MoveQuality.Blunder) blund++;
+            }
+            sb.Append($"<b>{SideName(side, true)}</b>: зевков {blund}, ошибок {mist}, неточностей {inacc}\n");
+        }
+        mReviewPanel.Show(move, sb.ToString());
     }
 
     #endregion
@@ -501,7 +726,7 @@ public class GameManager : MonoBehaviour
         CancelHint();
         Side mover = State.SideToMove;
         mEffects.Clear();
-        GameState before = Net == null && Lesson == null ? State.Clone() : null;
+        GameState before = Lesson == null ? State.Clone() : null;
         if (!Chess2.Core.Rules.TryMakeMove(State, move, mEffects))
             return false;
         if (before != null)
@@ -722,6 +947,7 @@ public class GameManager : MonoBehaviour
         Paused = false;
         SetVisible(true);
 
+        StopReview();
         Lesson = lesson;
         LessonStepIndex = 0;
         mHistory.Clear();
@@ -1104,7 +1330,7 @@ public class GameManager : MonoBehaviour
 
     public void OnSquareClicked(int sq)
     {
-        if (State == null || IsBotTurn || IsRemoteTurn || Paused || mLessonBusy)
+        if (State == null || IsBotTurn || IsRemoteTurn || Paused || mLessonBusy || Reviewing)
             return;
 
         // Сначала пробуем походить выбранной фигурой.
@@ -1221,6 +1447,8 @@ public class GameManager : MonoBehaviour
 
     private string StatusLine()
     {
+        if (Reviewing)
+            return $"Разбор партии · ход {mReviewIndex} из {mReviewPositions.Count - 1}";
         if (State.IsOver)
             return ResultText(State);
 
@@ -1428,6 +1656,25 @@ public class GameManager : MonoBehaviour
         mUndoButton = UiKit.CreatePlateButton(safe, "Ход назад", new Vector2(270, 64), Undo, 28);
         ((RectTransform)mUndoButton.transform).anchoredPosition = new Vector2(400 + 40 + 135, -100);
         mUndoButton.gameObject.SetActive(false);
+
+        // Разбор партии: панель слева (на месте чата) и кнопки справа.
+        mReviewPanel = ReviewPanel.Create(safe, new Vector2(-(400 + 35 + ReviewPanel.Width / 2), -10));
+        mReviewPanel.gameObject.SetActive(false);
+        var controls = UiKit.CreateUi("Review Controls", safe);
+        controls.sizeDelta = Vector2.zero;
+        mReviewControls = controls.gameObject;
+        void ReviewButton(string label, float y, Action onClick)
+        {
+            var b = UiKit.CreatePlateButton(controls, label, new Vector2(270, 64), onClick, 26);
+            ((RectTransform)b.transform).anchoredPosition = new Vector2(400 + 40 + 135, y);
+        }
+        ReviewButton("« В начало", 230, () => ReviewGo(0));
+        ReviewButton("‹ Назад", 150, () => ReviewGo(mReviewIndex - 1));
+        ReviewButton("Вперёд ›", 70, () => ReviewGo(mReviewIndex + 1));
+        ReviewButton("В конец »", -10, () => ReviewGo(mReviewPositions.Count - 1));
+        ReviewButton("К ошибке ›", -90, ReviewNextMistake);
+        ReviewButton("Закончить", -170, EndReview);
+        mReviewControls.SetActive(false);
 
         // «Подсказка» — под «Ход назад».
         mHintButton = UiKit.CreatePlateButton(safe, "Подсказка", new Vector2(270, 64), RequestHint, 28);

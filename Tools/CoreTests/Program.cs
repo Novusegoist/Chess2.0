@@ -65,6 +65,7 @@ internal static class Program
         Run("Бот: скорость перебора", BotSpeed);
         Run("Сохранение партии: позиция, флаги, пассажиры и часы восстанавливаются точно", SaveRoundTrip);
         Run("Сохранение партии: повреждённый файл не загружается", SaveRejectsGarbage);
+        Run("Разбор: взять висящего ферзя — лучший ход, пропустить — ошибка", ReviewFindsMissedQueen);
         foreach (Lesson lesson in Tutorial.Lessons)
             Run("Урок «" + lesson.Title + "» проходится", () => LessonSolvable(lesson));
 
@@ -1155,6 +1156,25 @@ internal static class Program
         string from = s["h8"].IsEmpty ? "g8" : "h8";
         string to = from == "h8" ? "g8" : "h8";
         return Rules.TryMakeMove(s, from, to);
+    }
+
+    private static void ReviewFindsMissedQueen()
+    {
+        var s = new GameState(RuleSet.Default);
+        s.Put("h1", Side.White, PieceType.King);
+        s.Put("a1", Side.White, PieceType.Rook);
+        s.Put("h8", Side.Black, PieceType.King);
+        s.Put("a5", Side.Black, PieceType.Queen);
+
+        Move take = Rules.GetLegalMoves(s).First(m => m.From == Sq.Parse("a1") && m.To == Sq.Parse("a5"));
+        MoveReview good = GameAnalysis.Review(s, take);
+        Eq(MoveQuality.Best, good.Quality, "взять ферзя");
+
+        Move idle = Rules.GetLegalMoves(s).First(m => m.From == Sq.Parse("h1") && m.To == Sq.Parse("g1"));
+        MoveReview bad = GameAnalysis.Review(s, idle);
+        True(bad.Quality == MoveQuality.Mistake || bad.Quality == MoveQuality.Blunder,
+            "пропустить ферзя — ошибка или зевок, а не " + bad.Quality + " (потеря " + bad.Loss + ")");
+        True(bad.Best.HasValue && bad.Best.Value.To == Sq.Parse("a5"), "бот советует бить на a5");
     }
 
     private static void SaveRoundTrip()
