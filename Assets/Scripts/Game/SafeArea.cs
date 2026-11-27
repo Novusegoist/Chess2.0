@@ -29,6 +29,12 @@ public class SafeArea : MonoBehaviour
         if (size.x <= 0 || size.y <= 0)
             return;
 
+        // Безопасная зона должна лежать внутри экрана. В редакторе с открытым симулятором телефона
+        // окно Game получает зону от симулятора (в чужих координатах) — тогда берём весь экран.
+        if (safe.width <= 0 || safe.height <= 0 || safe.xMin < 0 || safe.yMin < 0
+            || safe.xMax > size.x + 1 || safe.yMax > size.y + 1)
+            safe = new Rect(0, 0, size.x, size.y);
+
         Vector2 min = new Vector2(safe.xMin / size.x, safe.yMin / size.y);
         Vector2 max = new Vector2(safe.xMax / size.x, safe.yMax / size.y);
         var rt = (RectTransform)transform;

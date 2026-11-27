@@ -70,6 +70,8 @@ public class GameManager : MonoBehaviour
     private Coroutine mBannerRoutine;
     private Text mHintText;
     private int mSelected = Sq.None;
+    private readonly List<GameState> mHistory = new List<GameState>(); // позиции перед каждым ходом — для «Ход назад»
+    private MenuButton mUndoButton;
     private List<Move> mSelectedMoves = new List<Move>();
     private readonly List<MoveEffect> mEffects = new List<MoveEffect>();
 
@@ -104,6 +106,7 @@ public class GameManager : MonoBehaviour
         PollBot();
         UpdateClockUi();
         UpdateConnectionUi();
+        UpdateUndo();
     }
 
     /// <summary>Пинг в заголовке чата и предупреждение в статусе, если соперник давно молчит.</summary>
@@ -238,6 +241,7 @@ public class GameManager : MonoBehaviour
     {
         CancelBot();
         EndLesson();
+        mHistory.Clear();
         if (saved != null)
         {
             State = saved.State;
@@ -268,6 +272,68 @@ public class GameManager : MonoBehaviour
         SaveNow();
         MaybeStartBot();
     }
+
+    #region Ход назад
+
+    /// <summary>
+    /// Отменить ход можно в партии с ботом и вдвоём (не по сети и не в уроке), пока партия идёт.
+    /// </summary>
+    public bool CanUndo => State != null && !State.IsOver && Net == null && Lesson == null
+                           && mHistory.Count > 0 && !Paused;
+
+    /// <summary>
+    /// «Ход назад». Против бота — до своего последнего хода (вместе с ответом бота,
+    /// а если бот ещё думает — его раздумья отменяются). Вдвоём — на один ход.
+    /// Время на часах не возвращается.
+    /// </summary>
+    public void Undo()
+    {
+        if (!CanUndo)
+            return;
+        CancelBot();
+
+        GameState target;
+        do
+        {
+            target = mHistory[mHistory.Count - 1];
+            mHistory.RemoveAt(mHistory.Count - 1);
+        }
+        while (PlayVsBot && target.SideToMove == BotSide && mHistory.Count > 0);
+
+        State = target;
+        Deselect();
+        mBoard.SetLastMove(AppSettings.ShowLastMove ? State.LastMove : null);
+        mPieceManager.Clear();
+        mPieceManager.Sync(State, null);
+        UpdateStatus();
+        SoundManager.Play("disembark", 0.7f);
+        SaveNow();
+        MaybeStartBot(); // бот ходил первым и мы откатились к началу — пусть снова ходит
+    }
+
+    private void UpdateUndo()
+    {
+        if (mUndoButton == null)
+            return;
+        bool show = CanUndo;
+        if (mUndoButton.gameObject.activeSelf != show)
+            mUndoButton.gameObject.SetActive(show);
+        if (show && Platform.IsDesktop && UndoKeyPressed())
+            Undo();
+    }
+
+    /// <summary>Ctrl+Z (на ПК).</summary>
+    private static bool UndoKeyPressed()
+    {
+#if ENABLE_INPUT_SYSTEM
+        var kb = UnityEngine.InputSystem.Keyboard.current;
+        return kb != null && kb.zKey.wasPressedThisFrame && (kb.leftCtrlKey.isPressed || kb.rightCtrlKey.isPressed);
+#else
+        return Input.GetKeyDown(KeyCode.Z) && (Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl));
+#endif
+    }
+
+    #endregion
 
     #region Сохранение
 
@@ -331,8 +397,11 @@ public class GameManager : MonoBehaviour
 
         Side mover = State.SideToMove;
         mEffects.Clear();
+        GameState before = Net == null && Lesson == null ? State.Clone() : null;
         if (!Chess2.Core.Rules.TryMakeMove(State, move, mEffects))
             return false;
+        if (before != null)
+            mHistory.Add(before);
 
         // Свой ход в сетевой игре — сразу сопернику, вместе с нашим временем на часах.
         if (Net != null && mover == LocalSide)
@@ -473,6 +542,7 @@ public class GameManager : MonoBehaviour
 
         Lesson = lesson;
         LessonStepIndex = 0;
+        mHistory.Clear();
         State = lesson.Setup();
         Rules = State.Rules;
         mStepStart = State.Clone();
@@ -1165,6 +1235,11 @@ public class GameManager : MonoBehaviour
         var ert = (RectTransform)mExplodeButton.transform;
         ert.anchoredPosition = new Vector2(400 + 40 + 135, 0);
         mExplodeButton.gameObject.SetActive(false);
+
+        // «Ход назад» — справа от доски, под кнопкой взрыва.
+        mUndoButton = UiKit.CreatePlateButton(safe, "Ход назад", new Vector2(270, 64), Undo, 28);
+        ((RectTransform)mUndoButton.transform).anchoredPosition = new Vector2(400 + 40 + 135, -100);
+        mUndoButton.gameObject.SetActive(false);
 
         // Часы справа от доски: сверху — соперник, снизу — тот, кто внизу доски.
         mTopClock = ClockPanel.Create(safe, new Vector2(400 + 40 + 115, 400 - 50));

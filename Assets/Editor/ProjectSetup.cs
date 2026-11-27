@@ -1,6 +1,7 @@
 using UnityEditor;
 using UnityEditor.Build;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 /// <summary>
 /// Нужные игре настройки сборки. Выставляются автоматически при загрузке проекта в редакторе,
@@ -31,6 +32,7 @@ public static class ProjectSetup
         ApplyMobile();
 
         // Иконку ставим, когда ассеты уже импортированы.
+        EditorApplication.delayCall += UseBuiltInRenderer;
         EditorApplication.delayCall += ApplyIcon;
         EditorApplication.delayCall += ApplyCursor;
     }
@@ -75,6 +77,36 @@ public static class ProjectSetup
         // На iPad приложение с одной ориентацией должно занимать весь экран.
         if (!PlayerSettings.iOS.requiresFullScreen)
             PlayerSettings.iOS.requiresFullScreen = true;
+    }
+
+    /// <summary>
+    /// Игра целиком нарисована интерфейсом, камера только заливает фон — 3D-рендер URP ей не нужен.
+    /// Встроенный рендер легче (особенно на телефонах) и не сыплет в консоль предупреждениями URP
+    /// «exceeds previous array size», которые появляются, когда в одном сеансе работают
+    /// симулятор телефона и окно Game (у них разные лимиты URP).
+    /// </summary>
+    private static void UseBuiltInRenderer()
+    {
+        bool changed = false;
+        if (GraphicsSettings.defaultRenderPipeline != null)
+        {
+            GraphicsSettings.defaultRenderPipeline = null;
+            changed = true;
+        }
+
+        int current = QualitySettings.GetQualityLevel();
+        for (int i = 0; i < QualitySettings.names.Length; i++)
+        {
+            if (QualitySettings.GetRenderPipelineAssetAt(i) == null)
+                continue;
+            QualitySettings.SetQualityLevel(i, false);
+            QualitySettings.renderPipeline = null;
+            changed = true;
+        }
+        QualitySettings.SetQualityLevel(current, false);
+
+        if (changed)
+            AssetDatabase.SaveAssets();
     }
 
     /// <summary>Курсор по умолчанию в сборке — сразу при запуске, ещё до загрузки сцены.</summary>

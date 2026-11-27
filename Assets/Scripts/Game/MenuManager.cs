@@ -522,9 +522,12 @@ public class MenuManager : MonoBehaviour
         Title(root, "ПЕПЕЛ И КОРОНА", 96, new Vector2(0, -110));
         var sub = UiKit.CreateText("Subtitle", root, "фигуры не умирают — они слабеют", 30, new Color(0.8f, 0.85f, 0.8f, 1f));
         Place(sub.transform, new Vector2(0.5f, 1), new Vector2(0, -200));
+        ((RectTransform)sub.transform).sizeDelta = new Vector2(1000, 40); // строка занимает 200..240 от верха
 
-        var col = UiKit.CreateColumn("Buttons", root, 18);
-        Place(col, new Vector2(0.5f, 0.5f), new Vector2(0, -90));
+        // Кнопки — сразу под подзаголовком (от верха экрана), чтобы при любом соотношении сторон
+        // и с кнопкой «Продолжить» они не наезжали на текст. Шесть кнопок занимают до ~580 из 900.
+        var col = UiKit.CreateColumn("Buttons", root, 14);
+        Place(col, new Vector2(0.5f, 1), new Vector2(0, -258));
         mContinueButton = UiKit.CreateImageButton(col, "continue", BigButtonHeight, ContinueSaved);
         UiKit.CreateImageButton(col, "play_bot", BigButtonHeight, () => Show(Screen.BotSetup));
         UiKit.CreateImageButton(col, "play_players", BigButtonHeight, () => Show(Screen.Players));
