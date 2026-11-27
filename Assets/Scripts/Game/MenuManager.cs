@@ -622,6 +622,14 @@ public class MenuManager : MonoBehaviour
         // «Статистика» — в левом верхнем углу (справа вверху — звук и музыка).
         var stats = UiKit.CreatePlateButton(root, L.T("Статистика"), new Vector2(240, 64), () => Show(Screen.Stats), 28);
         Place(stats.transform, new Vector2(0, 1), new Vector2(40 + 120, -64));
+
+        // Номер версии — в левом нижнем углу (пригодится, когда игроки пишут об ошибках).
+        var version = UiKit.CreateText("Version", root, "v" + Application.version, 18,
+            new Color(0.6f, 0.68f, 0.75f, 1f), TextAnchor.LowerLeft, shadow: false);
+        var vrt = (RectTransform)version.transform;
+        vrt.anchorMin = vrt.anchorMax = vrt.pivot = Vector2.zero;
+        vrt.anchoredPosition = new Vector2(16, 10);
+        vrt.sizeDelta = new Vector2(300, 26);
         return root.gameObject;
     }
 

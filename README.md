@@ -5,7 +5,7 @@
 Шахматы, в которых фигуры не умирают, а **слабеют**. Когда королю ставят мат, он уходит с доски,
 а его армия загорается и получает особые способности.
 
-Движок — Unity 6 (6000.3), язык — C#.
+Движок — Unity 6 (6000.3), язык — C#. Версия **0.9.0**. Как выпустить игру в магазинах — [RELEASE.md](RELEASE.md).
 
 ## Правила
 
@@ -200,8 +200,7 @@
 **Сборка для Android:** `File → Build Profiles → Android → Switch Platform`, затем `Build`.
 Получится `.aab` для Google Play. Перед публикацией:
 - создай ключ подписи (`Player Settings → Publishing Settings → Keystore Manager`) и сохрани его вместе с паролем: без него нельзя будет выпускать обновления;
-- замени временный идентификатор `com.ashandcrown.game` на свой (`Player Settings → Other Settings → Package Name`)
-  и константу `BundleId` в `Assets/Editor/ProjectSetup.cs`.
+- идентификатор приложения — `com.voidrunar.ashandcrown` (`BundleId` в `Assets/Editor/ProjectSetup.cs`).
 
 **Сборка для iOS:** `Build Profiles → iOS → Switch Platform → Build`. Unity на Windows соберёт только проект Xcode.
 Собрать и загрузить игру в App Store можно на Mac с Xcode и платным аккаунтом Apple Developer.
@@ -232,6 +231,7 @@
 | `Assets/Resources/Shaders` | Шейдер яркости для интерфейса |
 | `Assets/Editor` | Настройки сборки, которые выставляются автоматически (название, иконка, курсор, растягиваемое окно…) |
 | `Tools/CoreTests` | Тесты правил и бота (консольное приложение .NET) |
+| `docs` | Сайт для GitHub Pages: страница игры и политика конфиденциальности |
 | `Tools/Localization` | Английский перевод: `keys.txt` (русские строки) и `en.txt` (перевод); `make_en.py` собирает `Localization.En.cs` |
 | `Tools/Backgrounds` | Скрипты, которые рисуют фоны, иконку и курсор (`make_backgrounds.py`, `make_icon.py`, `make_cursor.py`; нужен Pillow) |
 
@@ -253,6 +253,11 @@ dotnet run --project Tools/CoreTests -c Release -- arena 10
 ```
 
 ## Последние изменения
+
+- Подготовка к выпуску: название **Ash & Crown**, компания VoidRunar, идентификатор `com.voidrunar.ashandcrown`,
+  версия 0.9.0 (видна в главном меню), иконка без прозрачности для iOS и адаптивная для Android,
+  политика конфиденциальности (`docs/`, для GitHub Pages), чек-лист выпуска [RELEASE.md](RELEASE.md).
+  Из-за смены названия и компании настройки, статистика и сохранение один раз начнутся заново.
 
 - Английский язык: переключатель в опциях, перевод всех текстов (меню, уроки, достижения, разбор, чат, Steam),
   кнопки-картинки на английском рисуются плашками с текстом. Интерфейс пересобирается без перезапуска игры.

@@ -10,16 +10,27 @@ using UnityEngine.Rendering;
 [InitializeOnLoad]
 public static class ProjectSetup
 {
-    private const string IconPath = "Assets/Art/Icon/icon.png";
+    private const string IconDir = "Assets/Art/Icon/";
+    private const string IconPath = IconDir + "icon.png";
     private const string CursorPath = "Assets/Resources/UI/cursor.png";
 
-    public const string ProductName = "Пепел и корона";
+    /// <summary>Название игры: заголовок окна, магазины, папка настроек и сохранений.</summary>
+    public const string ProductName = "Ash & Crown";
+    public const string CompanyName = "VoidRunar";
+
+    /// <summary>Идентификатор приложения в Google Play и App Store. После первой публикации не меняется.</summary>
+    public const string BundleId = "com.voidrunar.ashandcrown";
+
+    /// <summary>Первая версия для магазинов. Дальше версию повышают вручную в Player Settings.</summary>
+    private const string FirstVersion = "0.9.0";
 
     static ProjectSetup()
     {
-        // Название игры: заголовок окна, Steam, папка настроек.
         if (PlayerSettings.productName != ProductName)
             PlayerSettings.productName = ProductName;
+        if (PlayerSettings.companyName != CompanyName)
+            PlayerSettings.companyName = CompanyName;
+        ApplyFirstVersion();
 
         // В оконном режиме окно можно тянуть мышкой за край.
         if (!PlayerSettings.resizableWindow)
@@ -34,11 +45,20 @@ public static class ProjectSetup
         // Иконку ставим, когда ассеты уже импортированы.
         EditorApplication.delayCall += UseBuiltInRenderer;
         EditorApplication.delayCall += ApplyIcon;
+        EditorApplication.delayCall += ApplyStoreIcons;
         EditorApplication.delayCall += ApplyCursor;
     }
 
-    /// <summary>Временный идентификатор приложения. Перед публикацией замени на свой (например, com.твоёимя.ashandcrown).</summary>
-    public const string BundleId = "com.ashandcrown.game";
+    /// <summary>Версия выставляется один раз — пока стоит заводская (0.1 / 0.1.0 / 1.0).</summary>
+    private static void ApplyFirstVersion()
+    {
+        string v = PlayerSettings.bundleVersion;
+        if (v != "0.1" && v != "0.1.0" && v != "1.0" && !string.IsNullOrEmpty(v))
+            return;
+        PlayerSettings.bundleVersion = FirstVersion;
+        PlayerSettings.Android.bundleVersionCode = 1;
+        PlayerSettings.iOS.buildNumber = "1";
+    }
 
     /// <summary>
     /// Телефоны (Google Play и App Store): только альбомная ориентация, IL2CPP и ARM64 (так требует Google Play),
@@ -61,7 +81,8 @@ public static class ProjectSetup
         foreach (NamedBuildTarget target in new[] { NamedBuildTarget.Android, NamedBuildTarget.iOS })
         {
             string id = PlayerSettings.GetApplicationIdentifier(target);
-            if (string.IsNullOrEmpty(id) || id.Contains("DefaultCompany"))
+            // Заводской или временный идентификатор — меняем на настоящий.
+            if (string.IsNullOrEmpty(id) || id.Contains("DefaultCompany") || id == "com.ashandcrown.game")
                 PlayerSettings.SetApplicationIdentifier(target, BundleId);
         }
 
@@ -130,6 +151,44 @@ public static class ProjectSetup
         if (current.Length > 0 && current[0] == icon)
             return;
         PlayerSettings.SetIcons(NamedBuildTarget.Unknown, new[] { icon }, IconKind.Any);
+        AssetDatabase.SaveAssets();
+    }
+
+    /// <summary>
+    /// iOS: иконка без прозрачности (App Store отклоняет иконки с прозрачными углами).
+    /// Android: адаптивная иконка из двух слоёв — система сама обрежет её кругом, квадратом и т.п.
+    /// </summary>
+    private static void ApplyStoreIcons()
+    {
+        var opaque = AssetDatabase.LoadAssetAtPath<Texture2D>(IconDir + "icon_opaque.png");
+        if (opaque != null)
+        {
+            int count = PlayerSettings.GetIconSizes(NamedBuildTarget.iOS, IconKind.Application).Length;
+            Texture2D[] current = PlayerSettings.GetIcons(NamedBuildTarget.iOS, IconKind.Application);
+            if (count > 0 && (current.Length == 0 || current[0] != opaque))
+            {
+                var icons = new Texture2D[count];
+                for (int i = 0; i < count; i++)
+                    icons[i] = opaque;
+                PlayerSettings.SetIcons(NamedBuildTarget.iOS, icons, IconKind.Application);
+            }
+        }
+
+#if UNITY_ANDROID
+        var bg = AssetDatabase.LoadAssetAtPath<Texture2D>(IconDir + "android_bg.png");
+        var fg = AssetDatabase.LoadAssetAtPath<Texture2D>(IconDir + "android_fg.png");
+        if (bg != null && fg != null)
+        {
+            var kind = UnityEditor.Android.AndroidPlatformIconKind.Adaptive;
+            PlatformIcon[] icons = PlayerSettings.GetPlatformIcons(NamedBuildTarget.Android, kind);
+            if (icons.Length > 0 && icons[0].GetTexture(1) != fg)
+            {
+                foreach (PlatformIcon i in icons)
+                    i.SetTextures(bg, fg); // слой 0 — фон, слой 1 — передний план
+                PlayerSettings.SetPlatformIcons(NamedBuildTarget.Android, kind, icons);
+            }
+        }
+#endif
         AssetDatabase.SaveAssets();
     }
 }
