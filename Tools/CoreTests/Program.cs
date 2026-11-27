@@ -63,6 +63,8 @@ internal static class Program
         Run("Бот: бьёт незащищённого ферзя", BotHitsQueen);
         Run("Бот: в режиме «Мат» не подставляет короля", BotLegalInMateMode);
         Run("Бот: скорость перебора", BotSpeed);
+        Run("Сохранение партии: позиция, флаги, пассажиры и часы восстанавливаются точно", SaveRoundTrip);
+        Run("Сохранение партии: повреждённый файл не загружается", SaveRejectsGarbage);
         foreach (Lesson lesson in Tutorial.Lessons)
             Run("Урок «" + lesson.Title + "» проходится", () => LessonSolvable(lesson));
 
@@ -1153,6 +1155,51 @@ internal static class Program
         string from = s["h8"].IsEmpty ? "g8" : "h8";
         string to = from == "h8" ? "g8" : "h8";
         return Rules.TryMakeMove(s, from, to);
+    }
+
+    private static void SaveRoundTrip()
+    {
+        foreach (RuleSet rules in new[] { RuleSet.Default, RuleSet.Chaos })
+        {
+            for (int game = 0; game < 6; game++)
+            {
+                var rnd = new Random(100 + game);
+                GameState s = GameState.CreateStandard(rules, seed: 7 + game);
+                for (int ply = 0; ply < 120 && !s.IsOver; ply++)
+                {
+                    var moves = Rules.GetLegalMoves(s);
+                    if (moves.Count == 0)
+                        break;
+                    True(Rules.TryMakeMove(s, moves[rnd.Next(moves.Count)]), "ход");
+                    if (ply % 15 != 14)
+                        continue;
+
+                    var saved = new SavedGame
+                    {
+                        State = s, VsBot = true, BotSide = Side.White, Difficulty = BotDifficulty.Hard,
+                        TimeMinutes = 15, WhiteSeconds = 612.25, BlackSeconds = 1.0 / 3
+                    };
+                    string text = saved.Serialize();
+                    True(SavedGame.TryParse(text, out SavedGame back), "прочиталось");
+                    if (back == null)
+                        return;
+                    Eq(text, back.Serialize(), "сохранение после загрузки то же самое");
+                    Eq(s.ToAscii(), back.State.ToAscii(), "доска");
+                    Eq(Rules.GetLegalMoves(s).Count, Rules.GetLegalMoves(back.State).Count, "ходы те же");
+                    Eq(1.0 / 3, back.BlackSeconds, "время чёрных до долей секунды");
+                    Eq(BotDifficulty.Hard, back.Difficulty, "сложность");
+                    Eq(rules.WinCondition, back.State.Rules.WinCondition, "режим");
+                }
+            }
+        }
+    }
+
+    private static void SaveRejectsGarbage()
+    {
+        True(!SavedGame.TryParse("", out _), "пустой");
+        True(!SavedGame.TryParse("hello world", out _), "мусор");
+        True(!SavedGame.TryParse("version 999\nstate 0 0 0 0 0 1 1\ncell 0 1 0 1 0 1", out _), "чужая версия");
+        True(!SavedGame.TryParse("version 1\nstate 0 0 0 0 0 1 1\ncell x 1 0 1 0 1", out _), "битое число");
     }
 
     /// <summary>Каждый шаг урока выполним: найдётся цепочка правильных ходов (до 5), ведущая к цели.</summary>

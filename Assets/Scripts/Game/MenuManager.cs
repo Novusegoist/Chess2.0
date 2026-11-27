@@ -34,6 +34,7 @@ public class MenuManager : MonoBehaviour
     private MenuButton mAgainButton;
     private MenuButton mRestartButton;
     private MenuButton mResignButton;
+    private MenuButton mContinueButton;   // «Продолжить» в главном меню — есть сохранённая партия
     private readonly List<MenuButton> mLessonButtons = new List<MenuButton>();
 
     // Сеть: подключение, пока партия ещё не началась (дальше соединением владеет GameManager).
@@ -168,7 +169,10 @@ public class MenuManager : MonoBehaviour
         if (screen == Screen.Options)
             mOptions.Refresh();
         if (screen == Screen.Main)
+        {
             RefreshAudioIcons(); // звук могли переключить в опциях
+            mContinueButton.gameObject.SetActive(SaveStore.Exists);
+        }
         if (screen == Screen.Lessons)
             RefreshLessons();
     }
@@ -190,6 +194,15 @@ public class MenuManager : MonoBehaviour
         AppSettings.Save();
         mGame.StartGame(false, Side.Black, AppSettings.Difficulty, AppSettings.BuildRules(), AppSettings.TimeMinutes);
         Show(Screen.None);
+    }
+
+    /// <summary>«Продолжить»: вернуться к сохранённой партии.</summary>
+    private void ContinueSaved()
+    {
+        if (mGame.ResumeSaved())
+            Show(Screen.None);
+        else
+            mContinueButton.gameObject.SetActive(false);
     }
 
     private void OpenLessons()
@@ -510,8 +523,9 @@ public class MenuManager : MonoBehaviour
         var sub = UiKit.CreateText("Subtitle", root, "фигуры не умирают — они слабеют", 30, new Color(0.8f, 0.85f, 0.8f, 1f));
         Place(sub.transform, new Vector2(0.5f, 1), new Vector2(0, -200));
 
-        var col = UiKit.CreateColumn("Buttons", root, 22);
-        Place(col, new Vector2(0.5f, 0.5f), new Vector2(0, -70));
+        var col = UiKit.CreateColumn("Buttons", root, 18);
+        Place(col, new Vector2(0.5f, 0.5f), new Vector2(0, -90));
+        mContinueButton = UiKit.CreateImageButton(col, "continue", BigButtonHeight, ContinueSaved);
         UiKit.CreateImageButton(col, "play_bot", BigButtonHeight, () => Show(Screen.BotSetup));
         UiKit.CreateImageButton(col, "play_players", BigButtonHeight, () => Show(Screen.Players));
         UiKit.CreatePlateButton(col, "Обучение", new Vector2(361, BigButtonHeight), () => Show(Screen.Lessons), 38);

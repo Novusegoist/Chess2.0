@@ -128,6 +128,15 @@ public class GameManager : MonoBehaviour
         Net?.Close();
     }
 
+    // Телефон свернул игру (и может выгрузить её) или игру закрыли — сохраняем партию с временем на часах.
+    void OnApplicationPause(bool paused)
+    {
+        if (paused)
+            SaveNow();
+    }
+
+    void OnApplicationQuit() => SaveNow();
+
     #region Партия
 
     /// <summary>Начать партию. vsBot = false — вдвоём за одним компьютером.</summary>
@@ -206,6 +215,7 @@ public class GameManager : MonoBehaviour
     /// <summary>Убрать доску (выход в главное меню). Сетевое соединение закрывается.</summary>
     public void StopGame()
     {
+        SaveNow(); // вышли в меню посреди партии — её можно будет продолжить
         if (Net != null)
         {
             Net.Close();
@@ -224,13 +234,25 @@ public class GameManager : MonoBehaviour
         mRoot.SetActive(visible);
     }
 
-    private void NewGame()
+    private void NewGame(SavedGame saved = null)
     {
         CancelBot();
         EndLesson();
-        // В сетевой игре зерно общее — загорятся одни и те же фигуры у обоих.
-        State = GameState.CreateStandard(Rules, Net != null ? Net.Setup.Seed : (int?)null);
-        Clock = new ChessClock(TimeMinutes);
+        if (saved != null)
+        {
+            State = saved.State;
+            Clock = new ChessClock(TimeMinutes);
+            Clock.SetRemaining(Side.White, saved.WhiteSeconds);
+            Clock.SetRemaining(Side.Black, saved.BlackSeconds);
+            if (State.Ply > 0)
+                Clock.OnMoveMade(); // часы шли — пусть идут дальше
+        }
+        else
+        {
+            // В сетевой игре зерно общее — загорятся одни и те же фигуры у обоих.
+            State = GameState.CreateStandard(Rules, Net != null ? Net.Setup.Seed : (int?)null);
+            Clock = new ChessClock(TimeMinutes);
+        }
         if (mChat != null)
             mChat.gameObject.SetActive(Net != null); // чат — только в сетевой игре
 
@@ -238,13 +260,65 @@ public class GameManager : MonoBehaviour
         mBoard.SetFlipped(Net != null ? LocalSide == Side.Black : PlayVsBot && BotSide == Side.White);
 
         Deselect();
-        mBoard.SetLastMove(null);
+        mBoard.SetLastMove(AppSettings.ShowLastMove ? State.LastMove : null);
         mPieceManager.Clear();
         mPieceManager.Sync(State, null);
         UpdateStatus();
         SoundManager.Play("start", 0.7f, 0f);
+        SaveNow();
         MaybeStartBot();
     }
+
+    #region Сохранение
+
+    /// <summary>Сохраняются только партии против бота и вдвоём — не сетевые и не уроки.</summary>
+    private bool CanSave => State != null && Net == null && Lesson == null;
+
+    /// <summary>Записать партию на диск (законченную — стереть).</summary>
+    public void SaveNow()
+    {
+        if (!CanSave)
+            return;
+        if (State.IsOver)
+        {
+            SaveStore.Delete();
+            return;
+        }
+        SaveStore.Save(new SavedGame
+        {
+            State = State,
+            VsBot = PlayVsBot,
+            BotSide = BotSide,
+            Difficulty = BotDifficulty,
+            TimeMinutes = TimeMinutes,
+            WhiteSeconds = Clock.Remaining(Side.White),
+            BlackSeconds = Clock.Remaining(Side.Black)
+        });
+    }
+
+    /// <summary>Продолжить сохранённую партию. false — сохранения нет или оно повреждено.</summary>
+    public bool ResumeSaved()
+    {
+        if (!SaveStore.TryLoad(out SavedGame saved))
+            return false;
+        EnsureBuilt();
+        if (Net != null)
+        {
+            Net.Close();
+            Net = null;
+        }
+        PlayVsBot = saved.VsBot;
+        BotSide = saved.BotSide;
+        BotDifficulty = saved.Difficulty;
+        TimeMinutes = saved.TimeMinutes;
+        Rules = saved.State.Rules;
+        Paused = false;
+        SetVisible(true);
+        NewGame(saved);
+        return true;
+    }
+
+    #endregion
 
     /// <summary>
     /// Единая точка, через которую проходит любой ход: игрока, бота или из сети.
@@ -289,6 +363,8 @@ public class GameManager : MonoBehaviour
             OnLessonMove(State.LastMove ?? move);
             return true;
         }
+
+        SaveNow(); // после каждого хода: партия не потеряется, даже если телефон выгрузит игру
 
         if (State.IsOver)
             NotifyGameEnded();
@@ -357,6 +433,7 @@ public class GameManager : MonoBehaviour
     /// <summary>Партия закончилась: звук победы/поражения/ничьей и событие для меню.</summary>
     private void NotifyGameEnded()
     {
+        SaveNow(); // законченная партия стирается из сохранения
         if (State.Result == GameResult.Draw)
             SoundManager.Play("draw", 1f, 0f);
         else

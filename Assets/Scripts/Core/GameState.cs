@@ -63,6 +63,9 @@ namespace Chess2.Core
 
         private int _nextId = 1;
 
+        /// <summary>Счётчик id новых фигур (нужен для сохранения партии).</summary>
+        internal int NextId { get => _nextId; set => _nextId = value; }
+
         public GameState(RuleSet rules = null)
         {
             Rules = rules ?? RuleSet.Default;
