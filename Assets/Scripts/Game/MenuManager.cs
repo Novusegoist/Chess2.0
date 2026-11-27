@@ -19,7 +19,7 @@ using UnityEngine.InputSystem;
 [RequireComponent(typeof(GameManager))]
 public class MenuManager : MonoBehaviour
 {
-    private enum Screen { None, Main, BotSetup, Players, LocalSetup, HostSetup, Join, Waiting, Options, Pause, GameOver, Lessons, Stats }
+    private enum Screen { None, Main, BotSetup, Players, LocalSetup, HostSetup, Join, Waiting, Options, Pause, GameOver, Lessons, Stats, Achievements }
 
     private const float BigButtonHeight = 84f;
 
@@ -38,7 +38,10 @@ public class MenuManager : MonoBehaviour
     private readonly List<Text> mStatsCells = new List<Text>();   // 6 строк × 3 числа
     private Text mStatsSummary;
     private MenuButton mStatsReset;
-    private bool mStatsResetArmed;                                 // «Сбросить» нажали один раз — ждём подтверждения   // «Продолжить» в главном меню — есть сохранённая партия
+    private bool mStatsResetArmed;
+    private readonly List<(Achievements.Def def, Text title, Text desc)> mAchItems =
+        new List<(Achievements.Def, Text, Text)>();
+    private Text mAchHeader;                                 // «Сбросить» нажали один раз — ждём подтверждения   // «Продолжить» в главном меню — есть сохранённая партия
     private readonly List<MenuButton> mLessonButtons = new List<MenuButton>();
 
     // Сеть: подключение, пока партия ещё не началась (дальше соединением владеет GameManager).
@@ -144,6 +147,7 @@ public class MenuManager : MonoBehaviour
             case Screen.Lessons:
             case Screen.Stats:
             case Screen.Players: Show(Screen.Main); break;
+            case Screen.Achievements: Show(Screen.Stats); break;
             case Screen.LocalSetup:
             case Screen.HostSetup:
             case Screen.Join: Show(Screen.Players); break;
@@ -182,6 +186,8 @@ public class MenuManager : MonoBehaviour
             RefreshLessons();
         if (screen == Screen.Stats)
             RefreshStats();
+        if (screen == Screen.Achievements)
+            RefreshAchievements();
     }
 
     private void StartBotGame()
@@ -509,6 +515,7 @@ public class MenuManager : MonoBehaviour
         mScreens[Screen.GameOver] = BuildGameOver();
         mScreens[Screen.Lessons] = BuildLessons();
         mScreens[Screen.Stats] = BuildStats();
+        mScreens[Screen.Achievements] = BuildAchievements();
     }
 
     /// <summary>Кнопка «Меню» поверх доски во время партии.</summary>
@@ -787,8 +794,72 @@ public class MenuManager : MonoBehaviour
         rrt.anchorMin = rrt.anchorMax = rrt.pivot = new Vector2(1, 0);
         rrt.anchoredPosition = new Vector2(-60, 60);
 
+        // «Достижения» — внизу по центру.
+        var ach = UiKit.CreatePlateButton(root, "Достижения", new Vector2(320, 72), () => Show(Screen.Achievements), 30);
+        var art = (RectTransform)ach.transform;
+        art.anchorMin = art.anchorMax = art.pivot = new Vector2(0.5f, 0);
+        art.anchoredPosition = new Vector2(0, 56);
+
         BottomBar(root, () => Show(Screen.Main), null, null);
         return root.gameObject;
+    }
+
+    /// <summary>«Достижения»: две колонки карточек, открытые — яркие, закрытые — приглушённые.</summary>
+    private GameObject BuildAchievements()
+    {
+        var root = ScreenRoot("Achievements", UiKit.Background);
+        Title(root, "Достижения", 64, new Vector2(0, -40));
+        mAchHeader = UiKit.CreateText("Header", root, "", 26, new Color32(255, 215, 106, 255));
+        ((RectTransform)mAchHeader.transform).sizeDelta = new Vector2(800, 36);
+        Place(mAchHeader.transform, new Vector2(0.5f, 1), new Vector2(0, -118));
+
+        var grid = UiKit.CreateUi("Grid", root, typeof(GridLayoutGroup));
+        var layout = grid.GetComponent<GridLayoutGroup>();
+        layout.cellSize = new Vector2(600, 64);
+        layout.spacing = new Vector2(20, 8);
+        layout.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
+        layout.constraintCount = 2;
+        layout.childAlignment = TextAnchor.UpperCenter;
+        grid.sizeDelta = new Vector2(1220, 9 * 72);
+        Place(grid, new Vector2(0.5f, 1), new Vector2(0, -165));
+
+        foreach (Achievements.Def def in global::Achievements.All)
+        {
+            var card = UiKit.CreateUi("Card", grid, typeof(Image));
+            card.GetComponent<Image>().color = new Color32(16, 36, 48, 200);
+            var title = UiKit.CreateText("Title", card, def.Title, 24, UiKit.TextLight, TextAnchor.UpperLeft, shadow: false);
+            title.fontStyle = FontStyle.Bold;
+            var trt = (RectTransform)title.transform;
+            trt.anchorMin = new Vector2(0, 1);
+            trt.anchorMax = new Vector2(1, 1);
+            trt.pivot = new Vector2(0.5f, 1);
+            trt.offsetMin = new Vector2(16, -34);
+            trt.offsetMax = new Vector2(-16, -6);
+            var desc = UiKit.CreateText("Desc", card, def.Description, 18, UiKit.TextLight, TextAnchor.LowerLeft, shadow: false);
+            var drt = (RectTransform)desc.transform;
+            drt.anchorMin = new Vector2(0, 0);
+            drt.anchorMax = new Vector2(1, 0);
+            drt.pivot = new Vector2(0.5f, 0);
+            drt.offsetMin = new Vector2(16, 6);
+            drt.offsetMax = new Vector2(-16, 30);
+            mAchItems.Add((def, title, desc));
+        }
+
+        BottomBar(root, () => Show(Screen.Stats), null, null);
+        return root.gameObject;
+    }
+
+    private void RefreshAchievements()
+    {
+        int open = global::Achievements.UnlockedCount, total = global::Achievements.All.Count;
+        mAchHeader.text = $"Открыто: {open} из {total}";
+        foreach (var (def, title, desc) in mAchItems)
+        {
+            bool unlocked = global::Achievements.IsUnlocked(def.Id);
+            title.text = (unlocked ? "+ " : "") + def.Title;
+            title.color = unlocked ? new Color32(255, 215, 106, 255) : new Color32(140, 155, 165, 255);
+            desc.color = unlocked ? new Color32(220, 228, 235, 255) : new Color32(120, 132, 140, 255);
+        }
     }
 
     private static Text StatsCell(Transform row, string text, float width, int size, Color color)

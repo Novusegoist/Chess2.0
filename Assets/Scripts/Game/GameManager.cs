@@ -541,6 +541,7 @@ public class GameManager : MonoBehaviour
             return true;
         }
 
+        TrackAchievements(mover, State.LastMove ?? move);
         SaveNow(); // после каждого хода: партия не потеряется, даже если телефон выгрузит игру
 
         if (State.IsOver)
@@ -647,6 +648,57 @@ public class GameManager : MonoBehaviour
             outcome = winner == us ? GameStats.Outcome.Win : GameStats.Outcome.Loss;
         }
         GameStats.Record(row, outcome);
+
+        // Достижения за победу (против бота и по сети).
+        if (outcome != GameStats.Outcome.Win || row == GameStats.LocalRow)
+            return;
+        Achievements.Unlock("first_win");
+        if (Net != null)
+            Achievements.Unlock("net_win");
+        else
+            Achievements.Unlock(new[] { "beat_easy", "beat_medium", "beat_hard", "beat_expert" }[GameStats.BotRow(BotDifficulty)]);
+        Side me = Net != null ? LocalSide : BotSide.Opponent();
+        if (State.Rules.WinCondition == WinCondition.Annihilation)
+            Achievements.Unlock("chaos_win");
+        else if (State.FindKing(me) == Sq.None)
+            Achievements.Unlock("kingless_win");
+        if (GameStats.CurrentStreak >= 3)
+            Achievements.Unlock("streak3");
+    }
+
+    /// <summary>Чей ход — игрока за этим устройством (вдвоём — обоих).</summary>
+    private bool IsHumanSide(Side side) => Net != null ? side == LocalSide : !PlayVsBot || side != BotSide;
+
+    /// <summary>Достижения за ходы игрока: способности, мат, возрождение, призраки.</summary>
+    private void TrackAchievements(Side mover, Move move)
+    {
+        if (Lesson != null || !IsHumanSide(mover))
+            return;
+
+        switch (move.Kind)
+        {
+            case MoveKind.Pierce: Achievements.Unlock("pierce"); break;
+            case MoveKind.DoubleJump:
+            case MoveKind.DoubleCapture: Achievements.Unlock("double_jump"); break;
+            case MoveKind.Explode: Achievements.Unlock("trojan_boom"); break;
+        }
+
+        int enemiesHit = 0;
+        foreach (MoveEffect e in mEffects)
+        {
+            bool enemy = e.Side != mover;
+            if (enemy && (e.Kind == EffectKind.Degraded || e.Kind == EffectKind.Removed))
+                enemiesHit++;
+            if (enemy && e.Kind == EffectKind.KingFell)
+                Achievements.Unlock("king_fell");
+            if (enemy && e.Kind == EffectKind.Removed && e.OldType == PieceType.Ghost
+                && Achievements.AddProgress("ghosts") >= 10)
+                Achievements.Unlock("ghost_hunter");
+            if (!enemy && e.Kind == EffectKind.Promoted && State.Cells[e.To].OriginalType > PieceType.Pawn)
+                Achievements.Unlock("revive");
+        }
+        if (move.Kind == MoveKind.Explode && enemiesHit >= 3)
+            Achievements.Unlock("big_boom");
     }
 
     #region Обучение
@@ -759,6 +811,11 @@ public class GameManager : MonoBehaviour
                 if (LessonStepIndex >= Lesson.Steps.Length)
                 {
                     AppSettings.MarkLessonDone(Lesson.Id);
+                    bool all = true;
+                    foreach (Lesson l in Tutorial.Lessons)
+                        all &= AppSettings.IsLessonDone(l.Id);
+                    if (all)
+                        Achievements.Unlock("all_lessons");
                     SoundManager.PlayDelayed("win", 0.4f);
                 }
                 UpdateStatus();
