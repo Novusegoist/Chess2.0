@@ -29,7 +29,7 @@ public class ReviewPanel : MonoBehaviour
         var panel = rt.GetComponent<ReviewPanel>();
         panel.mTitle = panel.Block(rt, 30, UiKit.TextLight);
         panel.mTitle.fontStyle = FontStyle.Bold;
-        panel.mTitle.text = "Разбор партии";
+        panel.mTitle.text = L.T("Разбор партии");
         panel.mMove = panel.Block(rt, 22, UiKit.TextLight);
         panel.mSummary = panel.Block(rt, 20, new Color(0.8f, 0.85f, 0.9f, 1f));
         return panel;

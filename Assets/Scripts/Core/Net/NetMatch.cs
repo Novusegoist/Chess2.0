@@ -216,7 +216,7 @@ namespace Chess2.Core.Net
                 }
                 catch (Exception e)
                 {
-                    Disconnect("Непонятное сообщение от соперника: " + e.Message);
+                    Disconnect(CoreText.T("Непонятное сообщение от соперника: ") + e.Message);
                 }
             }
 
@@ -231,7 +231,7 @@ namespace Chess2.Core.Net
                     Transport.Send("PING " + _pingId.ToString(CultureInfo.InvariantCulture));
                 }
                 if (now - _lastReceived > LostAfter)
-                    Disconnect("Связь с соперником потеряна");
+                    Disconnect(CoreText.T("Связь с соперником потеряна"));
                 events.AddRange(_pending);
                 _pending.Clear();
             }
@@ -318,7 +318,7 @@ namespace Chess2.Core.Net
                 case "HELLO":
                     if (int.Parse(a[1], CultureInfo.InvariantCulture) != ProtocolVersion)
                     {
-                        Disconnect("У соперника другая версия игры");
+                        Disconnect(CoreText.T("У соперника другая версия игры"));
                         return;
                     }
                     if (Role == NetRole.Host)

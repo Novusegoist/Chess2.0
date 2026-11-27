@@ -55,19 +55,19 @@ public class SteamService : MonoBehaviour
         try
         {
             if (!Packsize.Test() || !DllCheck.Test())
-                InitError = "Файлы Steamworks не подходят к этой сборке";
+                InitError = L.T("Файлы Steamworks не подходят к этой сборке");
             else if (!SteamAPI.Init())
-                InitError = "Steam не запущен (или игра запущена не через Steam)";
+                InitError = L.T("Steam не запущен (или игра запущена не через Steam)");
             else
                 Ready = true;
         }
         catch (DllNotFoundException)
         {
-            InitError = "Не найдена библиотека steam_api64.dll";
+            InitError = L.T("Не найдена библиотека steam_api64.dll");
         }
         catch (Exception e)
         {
-            InitError = "Steam недоступен: " + e.Message;
+            InitError = L.T("Steam недоступен: ") + e.Message;
         }
 
         if (!Ready)
@@ -180,7 +180,7 @@ public class SteamService : MonoBehaviour
             return;
         if (ioFailure || result.m_eResult != EResult.k_EResultOK)
         {
-            t.Fail("Steam не смог создать лобби (" + result.m_eResult + ")");
+            t.Fail(L.T("Steam не смог создать лобби (") + result.m_eResult + ")");
             return;
         }
 
@@ -189,7 +189,7 @@ public class SteamService : MonoBehaviour
         SteamMatchmaking.SetLobbyData(t.Lobby, "protocol", NetMatch.ProtocolVersion.ToString());
         // «Присоединиться к игре» в списке друзей Steam.
         SteamFriends.SetRichPresence("connect", "+connect_lobby " + t.Lobby.m_SteamID);
-        SteamFriends.SetRichPresence("status", "Ждёт соперника · Пепел и корона");
+        SteamFriends.SetRichPresence("status", L.T("Ждёт соперника · Пепел и корона"));
         OpenInviteDialog();
     }
 
@@ -200,7 +200,7 @@ public class SteamService : MonoBehaviour
             return;
         if (ioFailure || result.m_EChatRoomEnterResponse != (uint)EChatRoomEnterResponse.k_EChatRoomEnterResponseSuccess)
         {
-            t.Fail("Не удалось войти в лобби друга — возможно, оно уже закрыто");
+            t.Fail(L.T("Не удалось войти в лобби друга — возможно, оно уже закрыто"));
             return;
         }
 
@@ -208,7 +208,7 @@ public class SteamService : MonoBehaviour
         if (SteamMatchmaking.GetLobbyData(lobby, "game") != LobbyGameKey)
         {
             SteamMatchmaking.LeaveLobby(lobby);
-            t.Fail("Это лобби не от «Пепла и короны»");
+            t.Fail(L.T("Это лобби не от «Пепла и короны»"));
             return;
         }
 
@@ -216,10 +216,10 @@ public class SteamService : MonoBehaviour
         t.Opponent = SteamMatchmaking.GetLobbyOwner(lobby);
         if (SteamMatchmaking.GetNumLobbyMembers(lobby) < 2)
         {
-            t.Fail("Друг уже вышел из лобби");
+            t.Fail(L.T("Друг уже вышел из лобби"));
             return;
         }
-        SteamFriends.SetRichPresence("status", "Играет в «Пепел и корону»");
+        SteamFriends.SetRichPresence("status", L.T("Играет в «Пепел и корону»"));
         t.SetStatus(TransportStatus.Connected);
     }
 
@@ -236,7 +236,7 @@ public class SteamService : MonoBehaviour
         if ((change & (uint)EChatMemberStateChange.k_EChatMemberStateChangeEntered) != 0 && t.IsHost)
         {
             t.Opponent = user;
-            SteamFriends.SetRichPresence("status", "Играет в «Пепел и корону»");
+            SteamFriends.SetRichPresence("status", L.T("Играет в «Пепел и корону»"));
             t.SetStatus(TransportStatus.Connected);
         }
 
@@ -245,7 +245,7 @@ public class SteamService : MonoBehaviour
                                  | EChatMemberStateChange.k_EChatMemberStateChangeKicked
                                  | EChatMemberStateChange.k_EChatMemberStateChangeBanned);
         if ((change & gone) != 0 && user == t.Opponent)
-            t.Fail("Соперник вышел из игры");
+            t.Fail(L.T("Соперник вышел из игры"));
     }
 
     private void OnChatMessage(LobbyChatMsg_t msg)
@@ -354,7 +354,7 @@ public class SteamService : MonoBehaviour
 
     public bool Ready => false;
 
-    public string InitError => "Steam есть только в версии для ПК";
+    public string InitError => L.T("Steam есть только в версии для ПК");
 
 #pragma warning disable 67 // событие никогда не срабатывает — так и задумано
     public event Action<ulong> InviteAccepted;

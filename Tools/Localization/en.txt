@@ -1,0 +1,348 @@
+Achievement unlocked!
+Chat · <color=#ff7a6b>no connection</color>
+Chat · <color=#ffb84d>unstable connection…</color>
+Chat · <color={0}>{1} ms</color>
+Chat
+Message…
+Phrases
+Opponent connected. Good luck!
+Rematch! Colors swapped.
+No mistakes found yet — analysis is still running
+No mistakes or blunders!
+<color=#6fd67c>best move</color>
+<color=#9fd6a8>good move</color>
+<color=#9fb7c4>only move</color>
+<color=#ffd76a>inaccuracy</color>
+<color=#ffa25a>mistake</color>
+<color=#ff6b6b>blunder</color>
+White
+white
+Black
+black
+Starting position.\nStep through the moves with the buttons on the right
+ or the ← → arrow keys.
+<b>Move {0}</b> ({1}):
+<color=#9fb7c4>the bot is still evaluating this move…</color>
+Rating:
+\nBetter was:
+Analysis: {0} of {1} moves…
+Analysis complete.
+<b>{0}</b>: blunders {1}, mistakes {2}, inaccuracies {3}
+Looking for a good move…
+<color=#ffd76a>Hint:</color>
+king
+queen
+rook
+bishop
+knight
+pawn
+ghost
+piece
+{0} {1} takes {2}
+{0} {1} takes {2} through a piece
+castling: king {0} → {1}
+double jump: knight {0} → {1} → {2}
+double jump: knight {0} via {1} takes {2}
+{0} {1} boards the knight on {2}
+drop the knight's passenger from {0} to {1}
+explode the knight on {0} (button on the right)
+Not that.
+You · {0}
+Opponent · {0}
+Bot · {0}
+Positions diverged — the game was stopped
+Opponent
+Opponent disconnected
+You
+<color=#3cd0d8>teal</color> — double jump (once per game)
+<color=#6fd67c>green dots</color> — drop off the passenger
+<color=#6fd67c>green ring</color> — board the knight
+<color=#b27cf0>purple</color> — strike through a piece (once per game)
+button on the right — explode the knight
+Game review · move {0} of {1}
+Task:
+Lesson “{0}” complete!
+Bot ({0}) is thinking…
+Opponent's move…
+Your move
+Move:
+White
+Black
+ (no king)
+ — CHECK!
+   · unstable connection to the opponent…
+Your king has fallen!
+The opponent's king has fallen!
+The bot's king has fallen!
+The white king has fallen!
+The black king has fallen!
+But no one is left to ignite…
+Ignited:
+knight (trojan)
+bishop (pierce)
+rook (pierce)
+queen (knight moves)
+Draw: {0}
+You won
+Opponent won
+Bot won
+White won
+Black won
+beginner
+amateur
+strong
+master
+checkmate
+no pieces left
+stalemate, no moves
+50 moves without captures
+only ghosts are left
+resignation
+time ran out
+opponent disconnected
+Explode knight
+Undo move
+« Start
+‹ Back
+Forward ›
+End »
+Next mistake ›
+Finish
+Hint
+Next lesson
+To lessons
+\n<color=#6fd67c><b>Lesson complete!</b></color>\n
+  (done)
+Rematch
+Play again
+The opponent offers a rematch!
+Waiting for the opponent's answer…
+Waiting for an opponent…
+Tell your opponent one of these addresses and the port
+(couldn't detect addresses)
+\n\nOn this same computer — 127.0.0.1. Over the internet you need Radmin VPN\nor an open port on your router.
+Enter an address, e.g. 192.168.1.5 or 26.12.34.56:7777
+Connecting…
+Address: {0}, port {1}
+Steam unavailable
+Steam is not running
+\n\nStart Steam, sign in and restart the game.\nMeanwhile you can play over IP.
+Play with a friend on Steam
+Invite a friend
+A Steam window opened: pick a friend and press “Invite”.\n\n
+Your friend accepts the invite in Steam — the game starts and connects on its own.\n
+No window? Press “Invite” below or Shift+Tab.\n\n
+(The Steam overlay works in a built game; it usually doesn't in the Unity editor.)
+Creating a lobby…
+Steam invite: finish your current game first
+Connecting to your friend…
+Joining the Steam lobby.
+ is here
+Connected
+, setting up the game…
+Lobby created, waiting for your friend…
+Connection closed
+ASH & CROWN
+pieces don't die — they weaken
+Tutorial
+Statistics
+Play vs Bot
+Difficulty
+Beginner
+Amateur
+Strong
+Master
+Your color
+Random
+Time per game
+Mode
+Play vs Players
+Same device
+Play with a friend on Steam
+Host a network game
+Join by IP
+Steam — invite a friend, nothing to set up.\nIP — on a local network, through Radmin VPN or over the internet.
+IP — on the same Wi-Fi, through a VPN or over the internet.\nYou can also play against PC: versions are compatible.
+Opponent's address
+e.g. 192.168.1.5
+Your opponent sees the address on the “Host a network game” screen.\nDefault port
+, another one goes after a colon: 26.12.34.56:7777
+Invite
+Two players on one device, taking turns.
+Short tasks on the board: the rules of Ash & Crown in five minutes.
+Wins
+Losses
+Draws
+Bot: beginner
+Bot: amateur
+Bot: strong
+Bot: master
+Online
+Two players*
+Reset
+Achievements
+Unlocked: {0} of {1}
+Games played: {0}   ·   Win streak: {1} (best — {2})
+Kings felled: {0}   ·   Lessons done: {1} of {2}
+<size=19>* Two players: white wins / black wins / draws. Streak counts games vs bot and online.</size>
+Really reset?
+Pause
+Restart
+Resign
+Game review
+View board
+Chess with weakening. After checkmate the king leaves, and 1–3 pieces of his army ignite and gain powers.\nThe kingless army wins by mating the other king and loses when it runs out of pieces.
+Every piece has every power from the start. The king weakens like everyone else, there is no check.\nYou win when your opponent has no pieces left.
+yes
+no
+No clock
+ min
+Crown
+Chaos
+Options
+Graphics
+Sound
+Game
+Frames per second
+like the monitor (VSync)
+unlimited
+Vertical sync
+On
+Off
+Brightness
+F11 — window ⇄ fullscreen. Drag the window edge to resize it.\nScreen mode and resolution only work in a built game, not in the editor.
+Fewer frames per second — the phone stays cooler and the battery lasts longer.
+Screen
+Fullscreen
+Window
+Resolution
+Window size
+Master volume
+Sounds
+Music
+Sounds — Kenney (kenney.nl). Music — joth, omfgdude, cynicmusic (OpenGameArt). All CC0.\n
+Chat emoji — OpenMoji (openmoji.org), license CC BY-SA 4.0.
+Move hints
+Last move
+Highlight
+Don't highlight
+Hints under the board
+Powers of ignited pieces (for new games):
+Trojan knight
+Yes
+No
+Queen also moves like a knight
+Pierce with bishop and rook
+Pierce through own pieces
+Steamworks files don't match this build
+Steam is not running (or the game wasn't started through Steam)
+steam_api64.dll library not found
+Steam unavailable:
+Steam couldn't create a lobby (
+Waiting for an opponent · Ash & Crown
+Couldn't join your friend's lobby — it may be closed already
+This lobby isn't from Ash & Crown
+Your friend has already left the lobby
+Playing Ash & Crown
+The opponent left the game
+Steam is only available in the PC version
+Blows weaken
+In Ash & Crown pieces don't die. A struck piece becomes one step weaker:\nking → queen → rook → bishop → knight → pawn → ghost.\nThe attacking piece stays where it is.
+Strike the black queen with the rook until it becomes a pawn
+The rook on a1 strikes along the file — tap it, then the piece on a5
+The queen went all the way down to a pawn, and the rook never left a1.
+To get rid of a strong piece you have to strike it several times.
+Ghost
+A struck pawn becomes a ghost. A ghost moves one square in any direction but can't capture.\nStrike a ghost and it leaves the board, and the attacker takes its square.
+Remove the black pawn from the board
+Strike d5 with the rook — twice
+The pawn became a ghost, and the ghost left the board.
+Ghosts are harmless but block the way — sometimes you have to clear them too.
+Revival
+A piece weakened to a pawn remembers what it was. On reaching the last rank it revives as its original piece.\nThe pawn on e7 used to be a queen.
+Move the pawn to e8
+The pawn moves forward — to e8
+The queen is back! A pawn that started as a pawn would become a queen.
+A weakened piece can return to the fight if you get it to the end of the board.
+Mate and fire
+Kings are never captured — they get checked and mated. But mate doesn't end the game:\nthe king leaves the board, and 1–3 pieces of his army ignite and gain powers.
+Checkmate the black king in one move
+The king is boxed in by his own pawns. Think about the back rank
+The black king has fallen, and his pieces ignited!
+Now Black has no king and doesn't fear check. They win if they mate your king and lose when they run out of pieces.
+Burning queen
+Your king has fallen, but your pieces are burning. A burning queen also moves like a knight — in an “L”.
+Strike the knight on f5 with a knight move
+Select the queen on d4 — f5 is among its moves
+An ordinary queen can't do that.
+The burning queen is the most dangerous piece on the board.
+Pierce
+A burning rook or bishop can strike through one piece once per game — enemy or your own.\nSuch moves are highlighted in purple.
+Strike the queen on a7 with the rook through the pawn
+Select the rook on a1 — purple mark on a7
+The pawn is intact, and the queen got weaker.
+Strike the rook on g5 with the bishop through your own pawn
+Select the bishop on c1 — purple mark on g5
+You can go through your own pieces too.
+Every burning rook and bishop has one pierce per game — save it.
+A burning knight is a trojan knight. It carries one of your pieces, jumps twice once per game and can explode.
+Board the bishop into the knight: select the bishop and tap the knight
+The bishop on e3 stands next to the knight — the knight has a green ring
+The bishop is inside. If the knight gets weakened, the passenger drops out nearby.
+Make a double jump with the knight
+Teal marks are the double jump. If it ends with a capture, the knight stays on the middle square
+Two jumps in one move. This knight can't double jump again.
+Explode the knight: select it and press the button to the right of the board
+Select the knight — the “Explode knight” button appears
+Boom! Every piece around got weaker — enemies and your own. The knight and its passenger are gone.
+The explosion doesn't touch kings. Explode where many enemy pieces are close.
+First win
+Win a game against the bot or online
+Warm-up
+Beat the beginner bot
+Amateur defeated
+Beat the amateur bot
+Stronger than strong
+Beat the strong bot
+Beat the master bot
+The king has fallen
+Checkmate an enemy king
+Kingless
+Win a game after losing your own king
+Trojan blast
+Explode a trojan knight
+Big boom
+Weaken three enemy pieces with one explosion
+Straight through
+Strike through a piece with a rook or bishop
+Double jump
+Jump twice with a knight in one move
+Bring a weakened piece back by taking a pawn to the end of the board
+Ghost hunter
+Remove 10 enemy ghosts from the board
+Streak
+Win three games in a row
+Lord of chaos
+Win a game in “Chaos” mode
+Online fighter
+Win a game online
+Student
+Complete every tutorial lesson
+Hi!
+Good luck!
+Nice move!
+Oops…
+Thanks!
+Thinking…
+Good game!
+Another game?
+Strange message from the opponent:
+Connection to the opponent lost
+The opponent has a different game version
+Couldn't open port
+Couldn't connect:
+Connection lost:
+Error while the opponent was connecting:
+Language
+System default
+The language will change when you return to the main menu.

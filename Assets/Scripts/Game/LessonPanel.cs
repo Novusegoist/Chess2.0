@@ -57,8 +57,8 @@ public class LessonPanel : MonoBehaviour
         // Кнопки в конце урока.
         var buttons = UiKit.CreateColumn("Buttons", rt, 12);
         mButtons = buttons.gameObject;
-        mNextButton = UiKit.CreatePlateButton(buttons, "Следующий урок", new Vector2(300, 64), next, 28);
-        UiKit.CreatePlateButton(buttons, "К урокам", new Vector2(300, 64), toLessons, 28);
+        mNextButton = UiKit.CreatePlateButton(buttons, L.T("Следующий урок"), new Vector2(300, 64), next, 28);
+        UiKit.CreatePlateButton(buttons, L.T("К урокам"), new Vector2(300, 64), toLessons, 28);
         mButtons.SetActive(false);
     }
 
@@ -66,24 +66,24 @@ public class LessonPanel : MonoBehaviour
     public void Show(Lesson lesson, int step, string note, bool hasNext)
     {
         bool finished = step >= lesson.Steps.Length;
-        mTitle.text = lesson.Title;
-        mIntro.text = lesson.Intro;
+        mTitle.text = L.T(lesson.Title);
+        mIntro.text = L.T(lesson.Intro);
 
         var sb = new StringBuilder();
         for (int i = 0; i < lesson.Steps.Length; i++)
         {
             LessonStep s = lesson.Steps[i];
             if (i < step)
-                sb.Append("<color=#6fd67c>+ ").Append(s.Task).Append("</color>\n<color=#9fb7c4><size=18>")
-                    .Append(s.Done).Append("</size></color>");
+                sb.Append("<color=#6fd67c>+ ").Append(L.T(s.Task)).Append("</color>\n<color=#9fb7c4><size=18>")
+                    .Append(L.T(s.Done)).Append("</size></color>");
             else if (i == step)
-                sb.Append("<color=#ffd76a><b>→ ").Append(s.Task).Append("</b></color>");
+                sb.Append("<color=#ffd76a><b>→ ").Append(L.T(s.Task)).Append("</b></color>");
             else
-                sb.Append("<color=#7d8c94>• ").Append(s.Task).Append("</color>");
+                sb.Append("<color=#7d8c94>• ").Append(L.T(s.Task)).Append("</color>");
             sb.Append('\n');
         }
         if (finished)
-            sb.Append("\n<color=#6fd67c><b>Урок пройден!</b></color>\n").Append(lesson.Outro);
+            sb.Append(L.T("\n<color=#6fd67c><b>Урок пройден!</b></color>\n")).Append(L.T(lesson.Outro));
         mSteps.text = sb.ToString();
 
         mNote.text = note ?? "";

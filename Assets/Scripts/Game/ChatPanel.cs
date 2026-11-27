@@ -119,16 +119,16 @@ public class ChatPanel : MonoBehaviour
     {
         string text;
         if (!connected)
-            text = "Чат · <color=#ff7a6b>нет связи</color>";
+            text = L.T("Чат · <color=#ff7a6b>нет связи</color>");
         else if (shaky)
-            text = "Чат · <color=#ffb84d>связь нестабильна…</color>";
+            text = L.T("Чат · <color=#ffb84d>связь нестабильна…</color>");
         else if (pingMs.HasValue)
         {
             string color = pingMs < 100 ? "#7fdc8a" : pingMs < 250 ? "#ffd166" : "#ff9f6b";
-            text = $"Чат · <color={color}>{pingMs} мс</color>";
+            text = L.F("Чат · <color={0}>{1} мс</color>", color, pingMs);
         }
         else
-            text = "Чат";
+            text = L.T("Чат");
 
         if (text == mTitleShown)
             return;
@@ -150,7 +150,7 @@ public class ChatPanel : MonoBehaviour
 
     private void Build(RectTransform root)
     {
-        var title = UiKit.CreateText("Title", root, "Чат", 28, UiKit.TextLight);
+        var title = UiKit.CreateText("Title", root, L.T("Чат"), 28, UiKit.TextLight);
         title.fontStyle = FontStyle.Bold;
         title.supportRichText = true;
         mTitle = title;
@@ -190,7 +190,7 @@ public class ChatPanel : MonoBehaviour
         mScroll.scrollSensitivity = 30;
 
         // Поле ввода и «отправить».
-        mInput = UiKit.CreateInputField(root, new Vector2(Width - 110, 52), "Сообщение…", 24);
+        mInput = UiKit.CreateInputField(root, new Vector2(Width - 110, 52), L.T("Сообщение…"), 24);
         var irt = (RectTransform)mInput.transform;
         irt.anchorMin = irt.anchorMax = irt.pivot = new Vector2(0, 0);
         irt.anchoredPosition = new Vector2(10, 84);
@@ -214,7 +214,7 @@ public class ChatPanel : MonoBehaviour
         srt.anchoredPosition = new Vector2(-10, 84);
 
         // Быстрые фразы и эмодзи.
-        var phrases = UiKit.CreatePlateButton(root, "Фразы", new Vector2(Width - 110, 56), () => Toggle(mPhrasesPopup), 28);
+        var phrases = UiKit.CreatePlateButton(root, L.T("Фразы"), new Vector2(Width - 110, 56), () => Toggle(mPhrasesPopup), 28);
         var prt = (RectTransform)phrases.transform;
         prt.anchorMin = prt.anchorMax = prt.pivot = new Vector2(0, 0);
         prt.anchoredPosition = new Vector2(10, 14);
@@ -242,7 +242,7 @@ public class ChatPanel : MonoBehaviour
         grid.padding = new RectOffset(8, 8, 8, 8);
         foreach (string phrase in QuickPhrases)
         {
-            string p = phrase;
+            string p = L.T(phrase);
             UiKit.CreatePlateButton(popup, p, grid.cellSize, () =>
             {
                 mSendText?.Invoke(p);

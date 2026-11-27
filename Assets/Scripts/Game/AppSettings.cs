@@ -188,6 +188,13 @@ public static class AppSettings
         set => SetBool("hintText", value);
     }
 
+    /// <summary>Язык: -1 — как в системе, 0 — русский, 1 — English.</summary>
+    public static int Language
+    {
+        get => PlayerPrefs.GetInt(Prefix + "language", -1);
+        set => PlayerPrefs.SetInt(Prefix + "language", value);
+    }
+
     /// <summary>Урок обучения пройден (по id урока).</summary>
     public static bool IsLessonDone(string id) => GetBool("lesson." + id, false);
 

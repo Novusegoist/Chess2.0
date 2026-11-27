@@ -207,10 +207,10 @@ public class GameManager : MonoBehaviour
             if (!rematch)
             {
                 mChat.Clear();
-                mChat.AddSystem("Соперник подключился. Удачной игры!");
+                mChat.AddSystem(L.T("Соперник подключился. Удачной игры!"));
             }
             else
-                mChat.AddSystem("Реванш! Цвета поменялись.");
+                mChat.AddSystem(L.T("Реванш! Цвета поменялись."));
         }
         mChatOpponent = net;
         NetGameStarted?.Invoke();
@@ -465,7 +465,7 @@ public class GameManager : MonoBehaviour
                 return;
             }
         }
-        ShowBanner(mAnalyzed < n ? "Ошибок пока не найдено — анализ ещё идёт" : "Ошибок и зевков нет!", 2f);
+        ShowBanner(mAnalyzed < n ? L.T("Ошибок пока не найдено — анализ ещё идёт") : L.T("Ошибок и зевков нет!"), 2f);
     }
 
     private void ShowReviewPosition()
@@ -508,17 +508,17 @@ public class GameManager : MonoBehaviour
     {
         switch (q)
         {
-            case MoveQuality.Best: return "<color=#6fd67c>лучший ход</color>";
-            case MoveQuality.Good: return "<color=#9fd6a8>хороший ход</color>";
-            case MoveQuality.Forced: return "<color=#9fb7c4>единственный ход</color>";
-            case MoveQuality.Inaccuracy: return "<color=#ffd76a>неточность</color>";
-            case MoveQuality.Mistake: return "<color=#ffa25a>ошибка</color>";
-            default: return "<color=#ff6b6b>зевок</color>";
+            case MoveQuality.Best: return L.T("<color=#6fd67c>лучший ход</color>");
+            case MoveQuality.Good: return L.T("<color=#9fd6a8>хороший ход</color>");
+            case MoveQuality.Forced: return L.T("<color=#9fb7c4>единственный ход</color>");
+            case MoveQuality.Inaccuracy: return L.T("<color=#ffd76a>неточность</color>");
+            case MoveQuality.Mistake: return L.T("<color=#ffa25a>ошибка</color>");
+            default: return L.T("<color=#ff6b6b>зевок</color>");
         }
     }
 
     private static string SideName(Side side, bool capital) =>
-        side == Side.White ? (capital ? "Белые" : "белые") : (capital ? "Чёрные" : "чёрные");
+        side == Side.White ? (capital ? L.T("Белые") : L.T("белые")) : (capital ? L.T("Чёрные") : L.T("чёрные"));
 
     private void RefreshReviewPanel()
     {
@@ -528,27 +528,27 @@ public class GameManager : MonoBehaviour
 
         string move;
         if (mReviewIndex == 0)
-            move = "Начальная позиция.\nЛистай ходы кнопками справа" + (Platform.IsDesktop ? " или стрелками ← →." : ".");
+            move = L.T("Начальная позиция.\nЛистай ходы кнопками справа") + (Platform.IsDesktop ? L.T(" или стрелками ← →.") : ".");
         else
         {
             GameState before = mReviewPositions[mReviewIndex - 1];
             Move played = mReviewPositions[mReviewIndex].LastMove ?? default;
             MoveReview r = mReviews[mReviewIndex - 1];
-            move = $"<b>Ход {mReviewIndex}</b> ({SideName(before.SideToMove, false)}):\n{DescribeMove(before, played)}\n\n";
+            move = L.F("<b>Ход {0}</b> ({1}):", mReviewIndex, SideName(before.SideToMove, false)) + "\n" + DescribeMove(before, played) + "\n\n";
             if (r == null)
-                move += "<color=#9fb7c4>бот ещё оценивает этот ход…</color>";
+                move += L.T("<color=#9fb7c4>бот ещё оценивает этот ход…</color>");
             else
             {
-                move += "Оценка: " + QualityText(r.Quality);
+                move += L.T("Оценка: ") + QualityText(r.Quality);
                 bool worse = r.Quality == MoveQuality.Inaccuracy || r.Quality == MoveQuality.Mistake
                              || r.Quality == MoveQuality.Blunder || r.Quality == MoveQuality.Good;
                 if (worse && r.Best.HasValue)
-                    move += "\nЛучше было: " + DescribeMove(before, r.Best.Value);
+                    move += L.T("\nЛучше было: ") + DescribeMove(before, r.Best.Value);
             }
         }
 
         var sb = new System.Text.StringBuilder();
-        sb.Append(analyzed < total ? $"Анализ: {analyzed} из {total} ходов…\n\n" : "Анализ готов.\n\n");
+        sb.Append(analyzed < total ? L.F("Анализ: {0} из {1} ходов…", analyzed, total) + "\n\n" : L.T("Анализ готов.") + "\n\n");
         foreach (Side side in new[] { Side.White, Side.Black })
         {
             int inacc = 0, mist = 0, blund = 0;
@@ -561,7 +561,7 @@ public class GameManager : MonoBehaviour
                 else if (r.Quality == MoveQuality.Mistake) mist++;
                 else if (r.Quality == MoveQuality.Blunder) blund++;
             }
-            sb.Append($"<b>{SideName(side, true)}</b>: зевков {blund}, ошибок {mist}, неточностей {inacc}\n");
+            sb.Append(L.F("<b>{0}</b>: зевков {1}, ошибок {2}, неточностей {3}", SideName(side, true), blund, mist, inacc) + "\n");
         }
         mReviewPanel.Show(move, sb.ToString());
     }
@@ -594,7 +594,7 @@ public class GameManager : MonoBehaviour
         mHintTask = Task.Run(() => bot.FindBestMove(snapshot, token));
 #endif
         if (mHintText != null)
-            mHintText.text = "Ищу хороший ход…";
+            mHintText.text = L.T("Ищу хороший ход…");
     }
 
     private void CancelHint()
@@ -624,21 +624,21 @@ public class GameManager : MonoBehaviour
         if (m.Kind != MoveKind.Explode)
             mBoard.ShowMoves(m.From, new List<Move> { m });
         if (mHintText != null)
-            mHintText.text = "<color=#ffd76a>Подсказка:</color> " + DescribeMove(State, m);
+            mHintText.text = L.T("<color=#ffd76a>Подсказка:</color> ") + DescribeMove(State, m);
     }
 
     private static string PieceName(PieceType t)
     {
         switch (t)
         {
-            case PieceType.King: return "король";
-            case PieceType.Queen: return "ферзь";
-            case PieceType.Rook: return "ладья";
-            case PieceType.Bishop: return "слон";
-            case PieceType.Knight: return "конь";
-            case PieceType.Pawn: return "пешка";
-            case PieceType.Ghost: return "призрак";
-            default: return "фигура";
+            case PieceType.King: return L.T("король");
+            case PieceType.Queen: return L.T("ферзь");
+            case PieceType.Rook: return L.T("ладья");
+            case PieceType.Bishop: return L.T("слон");
+            case PieceType.Knight: return L.T("конь");
+            case PieceType.Pawn: return L.T("пешка");
+            case PieceType.Ghost: return L.T("призрак");
+            default: return L.T("фигура");
         }
     }
 
@@ -649,15 +649,15 @@ public class GameManager : MonoBehaviour
         string from = Sq.Name(m.From), to = Sq.Name(m.To);
         switch (m.Kind)
         {
-            case MoveKind.Capture: return $"{who} {from} бьёт {to}";
-            case MoveKind.Pierce: return $"{who} {from} бьёт {to} сквозь фигуру";
-            case MoveKind.Castle: return $"рокировка: король {from} → {to}";
-            case MoveKind.DoubleJump: return $"двойной прыжок: конь {from} → {Sq.Name(m.Via)} → {to}";
-            case MoveKind.DoubleCapture: return $"двойной прыжок: конь {from} через {Sq.Name(m.Via)} бьёт {to}";
-            case MoveKind.Embark: return $"{who} {from} садится в коня на {to}";
-            case MoveKind.Disembark: return $"высадить пассажира коня {from} на {to}";
-            case MoveKind.Explode: return $"взорвать коня на {from} (кнопка справа)";
-            default: return $"{who} {from} → {to}";
+            case MoveKind.Capture: return L.F("{0} {1} бьёт {2}", who, from, to);
+            case MoveKind.Pierce: return L.F("{0} {1} бьёт {2} сквозь фигуру", who, from, to);
+            case MoveKind.Castle: return L.F("рокировка: король {0} → {1}", from, to);
+            case MoveKind.DoubleJump: return L.F("двойной прыжок: конь {0} → {1} → {2}", from, Sq.Name(m.Via), to);
+            case MoveKind.DoubleCapture: return L.F("двойной прыжок: конь {0} через {1} бьёт {2}", from, Sq.Name(m.Via), to);
+            case MoveKind.Embark: return L.F("{0} {1} садится в коня на {2}", who, from, to);
+            case MoveKind.Disembark: return L.F("высадить пассажира коня {0} на {1}", from, to);
+            case MoveKind.Explode: return L.F("взорвать коня на {0} (кнопка справа)", from);
+            default: return L.F("{0} {1} → {2}", who, from, to);
         }
     }
 
@@ -1049,7 +1049,7 @@ public class GameManager : MonoBehaviour
                 break;
 
             default:
-                mRetryRoutine = StartCoroutine(LessonRetry(step.Hint));
+                mRetryRoutine = StartCoroutine(LessonRetry(L.T(step.Hint)));
                 break;
         }
     }
@@ -1057,7 +1057,7 @@ public class GameManager : MonoBehaviour
     private System.Collections.IEnumerator LessonRetry(string hint)
     {
         mLessonBusy = true;
-        RefreshLessonPanel("Не то. " + hint + ".");
+        RefreshLessonPanel(L.T("Не то. ") + hint + ".");
         yield return new WaitForSeconds(1.1f);
         State = mStepStart.Clone();
         mLessonBusy = false;
@@ -1128,12 +1128,12 @@ public class GameManager : MonoBehaviour
 
     private string SideName(Side side)
     {
-        string color = side == Side.White ? "Белые" : "Чёрные";
+        string color = side == Side.White ? L.T("Белые") : L.T("Чёрные");
         if (Net != null)
-            return side == LocalSide ? $"Ты · {color.ToLowerInvariant()}" : $"Соперник · {color.ToLowerInvariant()}";
+            return side == LocalSide ? L.F("Ты · {0}", color.ToLowerInvariant()) : L.F("Соперник · {0}", color.ToLowerInvariant());
         if (!PlayVsBot)
             return color;
-        return side == BotSide ? $"Бот · {color.ToLowerInvariant()}" : $"Ты · {color.ToLowerInvariant()}";
+        return side == BotSide ? L.F("Бот · {0}", color.ToLowerInvariant()) : L.F("Ты · {0}", color.ToLowerInvariant());
     }
 
     #endregion
@@ -1160,7 +1160,7 @@ public class GameManager : MonoBehaviour
                     {
                         // Такого быть не должно: у соперника другая позиция.
                         Debug.LogError("Соперник прислал невозможный ход: " + e.Move);
-                        CloseNet("Позиции разошлись — партия остановлена");
+                        CloseNet(L.T("Позиции разошлись — партия остановлена"));
                     }
                     break;
                 }
@@ -1187,17 +1187,17 @@ public class GameManager : MonoBehaviour
                     break;
 
                 case NetEventKind.Chat:
-                    mChat?.AddText("Соперник", false, e.Text);
+                    mChat?.AddText(L.T("Соперник"), false, e.Text);
                     SoundManager.Play("chat", 0.8f, 0f);
                     break;
 
                 case NetEventKind.Emote:
-                    mChat?.AddEmote("Соперник", false, e.Value, EmotePosition(LocalSide.Opponent()));
+                    mChat?.AddEmote(L.T("Соперник"), false, e.Value, EmotePosition(LocalSide.Opponent()));
                     SoundManager.Play("emote", 0.8f);
                     break;
 
                 case NetEventKind.Disconnected:
-                    CloseNet(string.IsNullOrEmpty(e.Text) ? "Соперник отключился" : e.Text);
+                    CloseNet(string.IsNullOrEmpty(e.Text) ? L.T("Соперник отключился") : e.Text);
                     return;
             }
         }
@@ -1213,7 +1213,7 @@ public class GameManager : MonoBehaviour
         if (sent.Length == 0)
             return;
         mLastChatSent = Time.unscaledTime;
-        mChat.AddText("Ты", true, sent);
+        mChat.AddText(L.T("Ты"), true, sent);
     }
 
     private void SendEmote(int id)
@@ -1224,7 +1224,7 @@ public class GameManager : MonoBehaviour
             return;
         mLastChatSent = Time.unscaledTime;
         Net.SendEmote(id);
-        mChat.AddEmote("Ты", true, id, EmotePosition(LocalSide));
+        mChat.AddEmote(L.T("Ты"), true, id, EmotePosition(LocalSide));
     }
 
     /// <summary>Где всплывает крупный эмодзи: справа, у часов того, кто его отправил.</summary>
@@ -1427,11 +1427,11 @@ public class GameManager : MonoBehaviour
             return;
         }
         var parts = new List<string>();
-        if (hasDouble) parts.Add("<color=#3cd0d8>бирюзовые</color> — двойной прыжок (раз за игру)");
-        if (hasDisembark) parts.Add("<color=#6fd67c>зелёные точки</color> — высадить пассажира");
-        if (hasEmbark) parts.Add("<color=#6fd67c>зелёное кольцо</color> — сесть в коня");
-        if (hasPierce) parts.Add("<color=#b27cf0>фиолетовые</color> — удар сквозь фигуру (раз за игру)");
-        if (canExplode) parts.Add("кнопка справа — взорвать коня");
+        if (hasDouble) parts.Add(L.T("<color=#3cd0d8>бирюзовые</color> — двойной прыжок (раз за игру)"));
+        if (hasDisembark) parts.Add(L.T("<color=#6fd67c>зелёные точки</color> — высадить пассажира"));
+        if (hasEmbark) parts.Add(L.T("<color=#6fd67c>зелёное кольцо</color> — сесть в коня"));
+        if (hasPierce) parts.Add(L.T("<color=#b27cf0>фиолетовые</color> — удар сквозь фигуру (раз за игру)"));
+        if (canExplode) parts.Add(L.T("кнопка справа — взорвать коня"));
         mHintText.text = string.Join("   ·   ", parts);
     }
 
@@ -1448,32 +1448,32 @@ public class GameManager : MonoBehaviour
     private string StatusLine()
     {
         if (Reviewing)
-            return $"Разбор партии · ход {mReviewIndex} из {mReviewPositions.Count - 1}";
+            return L.F("Разбор партии · ход {0} из {1}", mReviewIndex, mReviewPositions.Count - 1);
         if (State.IsOver)
             return ResultText(State);
 
         if (Lesson != null)
             return LessonStepIndex < Lesson.Steps.Length
-                ? "Задание: " + Lesson.Steps[LessonStepIndex].Task
-                : "Урок «" + Lesson.Title + "» пройден!";
+                ? L.T("Задание: ") + L.T(Lesson.Steps[LessonStepIndex].Task)
+                : L.F("Урок «{0}» пройден!", L.T(Lesson.Title));
 
         string text;
         if (IsBotTurn)
-            text = $"Бот ({DifficultyText(BotDifficulty)}) думает…";
+            text = L.F("Бот ({0}) думает…", DifficultyText(BotDifficulty));
         else if (IsRemoteTurn)
-            text = "Ход соперника…";
+            text = L.T("Ход соперника…");
         else if (PlayVsBot || Net != null)
-            text = "Твой ход";
+            text = L.T("Твой ход");
         else
-            text = "Ход " + (State.SideToMove == Side.White ? "белых" : "чёрных");
+            text = L.T("Ход ") + (State.SideToMove == Side.White ? L.T("белых") : L.T("чёрных"));
 
         bool checkRules = State.Rules.WinCondition != WinCondition.Annihilation;
         if (checkRules && State.FindKing(State.SideToMove) == Sq.None)
-            text += " (без короля)";
+            text += L.T(" (без короля)");
         if (checkRules && Chess2.Core.Rules.IsInCheck(State, State.SideToMove))
-            text += " — ШАХ!";
+            text += L.T(" — ШАХ!");
         if (Net != null && Net.Shaky)
-            text += "   · связь с соперником нестабильна…";
+            text += L.T("   · связь с соперником нестабильна…");
         return text;
     }
 
@@ -1518,13 +1518,13 @@ public class GameManager : MonoBehaviour
         }
 
         string who = Net != null
-            ? (side == LocalSide ? "Твой король пал!" : "Король соперника пал!")
+            ? (side == LocalSide ? L.T("Твой король пал!") : L.T("Король соперника пал!"))
             : PlayVsBot
-            ? (side == BotSide ? "Король бота пал!" : "Твой король пал!")
-            : (side == Side.White ? "Белый король пал!" : "Чёрный король пал!");
+            ? (side == BotSide ? L.T("Король бота пал!") : L.T("Твой король пал!"))
+            : (side == Side.White ? L.T("Белый король пал!") : L.T("Чёрный король пал!"));
         string fire = lit.Count == 0
-            ? "Но загореться некому…"
-            : "Загорелись: " + string.Join(", ", lit);
+            ? L.T("Но загореться некому…")
+            : L.T("Загорелись: ") + string.Join(", ", lit);
         return who + "\n" + fire;
     }
 
@@ -1532,10 +1532,10 @@ public class GameManager : MonoBehaviour
     {
         switch (type)
         {
-            case PieceType.Knight: return "конь (троянский)";
-            case PieceType.Bishop: return "слон (пробивание)";
-            case PieceType.Rook: return "ладья (пробивание)";
-            case PieceType.Queen: return "ферзь (ходы коня)";
+            case PieceType.Knight: return L.T("конь (троянский)");
+            case PieceType.Bishop: return L.T("слон (пробивание)");
+            case PieceType.Rook: return L.T("ладья (пробивание)");
+            case PieceType.Queen: return L.T("ферзь (ходы коня)");
             default: return type.ToString();
         }
     }
@@ -1545,24 +1545,24 @@ public class GameManager : MonoBehaviour
     {
         string reason = ReasonText(s.EndReason);
         if (s.Result == GameResult.Draw)
-            return $"Ничья: {reason}";
+            return L.F("Ничья: {0}", reason);
 
         Side winner = s.Result == GameResult.WhiteWins ? Side.White : Side.Black;
         if (Net != null)
-            return (winner == LocalSide ? "Ты победил" : "Соперник победил") + $": {reason}";
+            return (winner == LocalSide ? L.T("Ты победил") : L.T("Соперник победил")) + $": {reason}";
         if (PlayVsBot)
-            return (winner == BotSide ? "Бот победил" : "Ты победил") + $": {reason}";
-        return (winner == Side.White ? "Белые победили" : "Чёрные победили") + $": {reason}";
+            return (winner == BotSide ? L.T("Бот победил") : L.T("Ты победил")) + $": {reason}";
+        return (winner == Side.White ? L.T("Белые победили") : L.T("Чёрные победили")) + $": {reason}";
     }
 
     public static string DifficultyText(BotDifficulty d)
     {
         switch (d)
         {
-            case BotDifficulty.Easy: return "новичок";
-            case BotDifficulty.Medium: return "любитель";
-            case BotDifficulty.Hard: return "сильный";
-            default: return "мастер";
+            case BotDifficulty.Easy: return L.T("новичок");
+            case BotDifficulty.Medium: return L.T("любитель");
+            case BotDifficulty.Hard: return L.T("сильный");
+            default: return L.T("мастер");
         }
     }
 
@@ -1570,14 +1570,14 @@ public class GameManager : MonoBehaviour
     {
         switch (reason)
         {
-            case EndReason.Checkmate: return "мат";
-            case EndReason.Annihilation: return "фигур не осталось";
-            case EndReason.Stalemate: return "пат, ходить нечем";
-            case EndReason.NoProgress: return "50 ходов без ударов";
-            case EndReason.OnlyGhosts: return "остались одни призраки";
-            case EndReason.Resignation: return "сдача";
-            case EndReason.Timeout: return "время вышло";
-            case EndReason.Disconnected: return "соперник отключился";
+            case EndReason.Checkmate: return L.T("мат");
+            case EndReason.Annihilation: return L.T("фигур не осталось");
+            case EndReason.Stalemate: return L.T("пат, ходить нечем");
+            case EndReason.NoProgress: return L.T("50 ходов без ударов");
+            case EndReason.OnlyGhosts: return L.T("остались одни призраки");
+            case EndReason.Resignation: return L.T("сдача");
+            case EndReason.Timeout: return L.T("время вышло");
+            case EndReason.Disconnected: return L.T("соперник отключился");
             default: return reason.ToString();
         }
     }
@@ -1647,13 +1647,13 @@ public class GameManager : MonoBehaviour
         hrt.sizeDelta = new Vector2(0, 36);
 
         // Кнопка взрыва троянского коня — справа от доски, видна только когда выбран конь.
-        mExplodeButton = UiKit.CreatePlateButton(safe, "Взорвать коня", new Vector2(270, 72), ExplodeSelected, 30);
+        mExplodeButton = UiKit.CreatePlateButton(safe, L.T("Взорвать коня"), new Vector2(270, 72), ExplodeSelected, 30);
         var ert = (RectTransform)mExplodeButton.transform;
         ert.anchoredPosition = new Vector2(400 + 40 + 135, 0);
         mExplodeButton.gameObject.SetActive(false);
 
         // «Ход назад» — справа от доски, под кнопкой взрыва.
-        mUndoButton = UiKit.CreatePlateButton(safe, "Ход назад", new Vector2(270, 64), Undo, 28);
+        mUndoButton = UiKit.CreatePlateButton(safe, L.T("Ход назад"), new Vector2(270, 64), Undo, 28);
         ((RectTransform)mUndoButton.transform).anchoredPosition = new Vector2(400 + 40 + 135, -100);
         mUndoButton.gameObject.SetActive(false);
 
@@ -1668,16 +1668,16 @@ public class GameManager : MonoBehaviour
             var b = UiKit.CreatePlateButton(controls, label, new Vector2(270, 64), onClick, 26);
             ((RectTransform)b.transform).anchoredPosition = new Vector2(400 + 40 + 135, y);
         }
-        ReviewButton("« В начало", 230, () => ReviewGo(0));
-        ReviewButton("‹ Назад", 150, () => ReviewGo(mReviewIndex - 1));
-        ReviewButton("Вперёд ›", 70, () => ReviewGo(mReviewIndex + 1));
-        ReviewButton("В конец »", -10, () => ReviewGo(mReviewPositions.Count - 1));
-        ReviewButton("К ошибке ›", -90, ReviewNextMistake);
-        ReviewButton("Закончить", -170, EndReview);
+        ReviewButton(L.T("« В начало"), 230, () => ReviewGo(0));
+        ReviewButton(L.T("‹ Назад"), 150, () => ReviewGo(mReviewIndex - 1));
+        ReviewButton(L.T("Вперёд ›"), 70, () => ReviewGo(mReviewIndex + 1));
+        ReviewButton(L.T("В конец »"), -10, () => ReviewGo(mReviewPositions.Count - 1));
+        ReviewButton(L.T("К ошибке ›"), -90, ReviewNextMistake);
+        ReviewButton(L.T("Закончить"), -170, EndReview);
         mReviewControls.SetActive(false);
 
         // «Подсказка» — под «Ход назад».
-        mHintButton = UiKit.CreatePlateButton(safe, "Подсказка", new Vector2(270, 64), RequestHint, 28);
+        mHintButton = UiKit.CreatePlateButton(safe, L.T("Подсказка"), new Vector2(270, 64), RequestHint, 28);
         ((RectTransform)mHintButton.transform).anchoredPosition = new Vector2(400 + 40 + 135, -180);
         mHintButton.gameObject.SetActive(false);
 

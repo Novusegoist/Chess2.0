@@ -19,6 +19,18 @@ public class OptionsScreen
 
     public GameObject Root { get; private set; }
 
+    /// <summary>Игрок сменил язык (меню решает, пересобрать ли интерфейс сразу).</summary>
+    public event Action LanguageChanged;
+
+    private Text mLanguageNote;
+
+    /// <summary>Показать под строкой языка «сменится, когда выйдешь в главное меню».</summary>
+    public void ShowLanguagePending(bool pending)
+    {
+        if (mLanguageNote != null)
+            mLanguageNote.gameObject.SetActive(pending);
+    }
+
     /// <summary>Собрать экран. close — «назад» и «сохранить».</summary>
     public GameObject Build(Transform canvas, Action close, Action<Transform, string, int, Vector2> title,
         Action<Transform, Action, string, Action> bottomBar)
@@ -26,16 +38,16 @@ public class OptionsScreen
         var root = UiKit.CreateScreen("Options", canvas, UiKit.Background, "bg_menu");
         Root = root.gameObject;
 
-        title(root, "Опции", 64, new Vector2(0, -50));
+        title(root, L.T("Опции"), 64, new Vector2(0, -50));
 
         // Вкладки.
         var tabs = UiKit.CreateRow("Tabs", root, 16);
         tabs.anchorMin = tabs.anchorMax = new Vector2(0.5f, 1);
         tabs.pivot = new Vector2(0.5f, 1);
         tabs.anchoredPosition = new Vector2(0, -140);
-        AddTab(tabs, "Графика", Tab.Graphics);
-        AddTab(tabs, "Звук", Tab.Sound);
-        AddTab(tabs, "Игра", Tab.Game);
+        AddTab(tabs, L.T("Графика"), Tab.Graphics);
+        AddTab(tabs, L.T("Звук"), Tab.Sound);
+        AddTab(tabs, L.T("Игра"), Tab.Game);
 
         mPanels[Tab.Graphics] = BuildGraphics(root);
         mPanels[Tab.Sound] = BuildSound(root);
@@ -91,7 +103,7 @@ public class OptionsScreen
         if (Platform.IsDesktop)
             BuildScreenRows(col);
 
-        var fps = UiKit.CreateSelector(UiKit.CreateSettingRow(col, "Кадров в секунду"), d =>
+        var fps = UiKit.CreateSelector(UiKit.CreateSettingRow(col, L.T("Кадров в секунду")), d =>
         {
             int[] opts = AppSettings.FpsOptions;
             int i = Array.IndexOf(opts, AppSettings.FpsLimit);
@@ -101,22 +113,22 @@ public class OptionsScreen
             Refresh();
         });
         mRefreshers.Add(() => fps.text = AppSettings.VSync && Platform.IsDesktop
-            ? "как у монитора (VSync)"
-            : AppSettings.FpsLimit > 0 ? AppSettings.FpsLimit.ToString() : "без ограничения");
+            ? L.T("как у монитора (VSync)")
+            : AppSettings.FpsLimit > 0 ? AppSettings.FpsLimit.ToString() : L.T("без ограничения"));
 
         if (Platform.IsDesktop)
         {
-            var vsync = UiKit.CreateSelector(UiKit.CreateSettingRow(col, "Вертикальная синхронизация"), d =>
+            var vsync = UiKit.CreateSelector(UiKit.CreateSettingRow(col, L.T("Вертикальная синхронизация")), d =>
             {
                 AppSettings.VSync = !AppSettings.VSync;
                 AppPerformance.ApplyFrameRate();
                 Refresh();
             });
-            mRefreshers.Add(() => vsync.text = AppSettings.VSync ? "Вкл" : "Выкл");
+            mRefreshers.Add(() => vsync.text = AppSettings.VSync ? L.T("Вкл") : L.T("Выкл"));
         }
 
         Text brightnessValue = null;
-        var brightness = UiKit.CreateSlider(UiKit.CreateSettingRow(col, "Яркость"), 0.5f, 1.5f, v =>
+        var brightness = UiKit.CreateSlider(UiKit.CreateSettingRow(col, L.T("Яркость")), 0.5f, 1.5f, v =>
         {
             AppSettings.Brightness = v;
             AppPerformance.ApplyBrightness();
@@ -129,25 +141,25 @@ public class OptionsScreen
         });
 
         if (Platform.IsDesktop)
-            Note(col, "F11 — окно ⇄ полный экран. Окно можно тянуть мышкой за край.\nРежим экрана и разрешение работают только в собранной игре, не в редакторе.");
+            Note(col, L.T("F11 — окно ⇄ полный экран. Окно можно тянуть мышкой за край.\nРежим экрана и разрешение работают только в собранной игре, не в редакторе."));
         else
-            Note(col, "Меньше кадров в секунду — телефон меньше греется и дольше работает от батареи.");
+            Note(col, L.T("Меньше кадров в секунду — телефон меньше греется и дольше работает от батареи."));
         return col.gameObject;
     }
 
     /// <summary>Строки «Экран» и «Разрешение / Размер окна» — только на ПК.</summary>
     private void BuildScreenRows(Transform col)
     {
-        var screen = UiKit.CreateSelector(UiKit.CreateSettingRow(col, "Экран"), d =>
+        var screen = UiKit.CreateSelector(UiKit.CreateSettingRow(col, L.T("Экран")), d =>
         {
             AppSettings.Fullscreen = !AppSettings.Fullscreen;
             AppPerformance.ApplyScreen();
             Refresh();
         });
-        mRefreshers.Add(() => screen.text = AppSettings.Fullscreen ? "Полный экран" : "Окно");
+        mRefreshers.Add(() => screen.text = AppSettings.Fullscreen ? L.T("Полный экран") : L.T("Окно"));
 
         // В полном экране — разрешение, в окне — размер окна (его же можно тянуть мышкой).
-        RectTransform resRow = UiKit.CreateSettingRow(col, "Разрешение");
+        RectTransform resRow = UiKit.CreateSettingRow(col, L.T("Разрешение"));
         Text resLabel = resRow.parent.GetComponentInChildren<Text>();
         var res = UiKit.CreateSelector(resRow, d =>
         {
@@ -163,7 +175,7 @@ public class OptionsScreen
         });
         mRefreshers.Add(() =>
         {
-            resLabel.text = AppSettings.Fullscreen ? "Разрешение" : "Размер окна";
+            resLabel.text = AppSettings.Fullscreen ? L.T("Разрешение") : L.T("Размер окна");
             var list = Resolutions();
             Vector2Int r = list[CurrentResolutionIndex(list)];
             res.text = $"{r.x} × {r.y}";
@@ -217,20 +229,20 @@ public class OptionsScreen
     {
         var col = Panel(root, "Sound");
 
-        AddVolume(col, "Общая громкость", () => AppSettings.MasterVolume, v =>
+        AddVolume(col, L.T("Общая громкость"), () => AppSettings.MasterVolume, v =>
         {
             AppSettings.MasterVolume = v;
             AppPerformance.ApplyVolume();
         });
-        AddVolume(col, "Звуки", () => AppSettings.SoundVolume, v => AppSettings.SoundVolume = v);
-        AddVolume(col, "Музыка", () => AppSettings.MusicVolume, v => AppSettings.MusicVolume = v);
+        AddVolume(col, L.T("Звуки"), () => AppSettings.SoundVolume, v => AppSettings.SoundVolume = v);
+        AddVolume(col, L.T("Музыка"), () => AppSettings.MusicVolume, v => AppSettings.MusicVolume = v);
 
-        AddToggle(col, "Звуки", () => AppSettings.Sound, v => AppSettings.Sound = v, "Вкл", "Выкл");
-        AddToggle(col, "Музыка", () => AppSettings.Music, v => AppSettings.Music = v, "Вкл", "Выкл");
+        AddToggle(col, L.T("Звуки"), () => AppSettings.Sound, v => AppSettings.Sound = v, L.T("Вкл"), L.T("Выкл"));
+        AddToggle(col, L.T("Музыка"), () => AppSettings.Music, v => AppSettings.Music = v, L.T("Вкл"), L.T("Выкл"));
 
         // Авторство сторонних материалов (лицензия CC BY-SA эмодзи требует указать его в игре).
-        Note(col, "Звуки — Kenney (kenney.nl). Музыка — joth, omfgdude, cynicmusic (OpenGameArt). Всё под CC0.\n"
-                  + "Эмодзи в чате — OpenMoji (openmoji.org), лицензия CC BY-SA 4.0.");
+        Note(col, L.T("Звуки — Kenney (kenney.nl). Музыка — joth, omfgdude, cynicmusic (OpenGameArt). Всё под CC0.\n")
+                  + L.T("Эмодзи в чате — OpenMoji (openmoji.org), лицензия CC BY-SA 4.0."));
         return col.gameObject;
     }
 
@@ -257,15 +269,32 @@ public class OptionsScreen
     {
         var col = Panel(root, "Game");
 
-        AddToggle(col, "Подсказки ходов", () => AppSettings.ShowMoveHints, v => AppSettings.ShowMoveHints = v, "Вкл", "Выкл");
-        AddToggle(col, "Последний ход", () => AppSettings.ShowLastMove, v => AppSettings.ShowLastMove = v, "Подсвечивать", "Не подсвечивать");
-        AddToggle(col, "Подсказки под доской", () => AppSettings.ShowHintText, v => AppSettings.ShowHintText = v, "Вкл", "Выкл");
+        // Язык: как в системе → русский → English → …
+        var lang = UiKit.CreateSelector(UiKit.CreateSettingRow(col, L.T("Язык") + " / Language"), d =>
+        {
+            int v = AppSettings.Language + d;
+            AppSettings.Language = v > 1 ? -1 : v < -1 ? 1 : v;
+            AppSettings.Save();
+            Refresh();
+            LanguageChanged?.Invoke();
+        });
+        mRefreshers.Add(() => lang.text = AppSettings.Language == 0 ? "Русский"
+            : AppSettings.Language == 1 ? "English"
+            : L.T("Как в системе"));
+        mLanguageNote = UiKit.CreateText("LanguageNote", col, L.T("Язык сменится, когда выйдешь в главное меню."),
+            22, new Color32(255, 200, 120, 255));
+        ((RectTransform)mLanguageNote.transform).sizeDelta = new Vector2(1000, 32);
+        mLanguageNote.gameObject.SetActive(false);
 
-        Note(col, "Способности загоревшихся фигур (для новых партий):");
-        AddToggle(col, "Троянский конь", () => AppSettings.TrojanKnight, v => AppSettings.TrojanKnight = v, "Да", "Нет");
-        AddToggle(col, "Ферзь ходит и как конь", () => AppSettings.QueenMovesAsKnight, v => AppSettings.QueenMovesAsKnight = v, "Да", "Нет");
-        AddToggle(col, "Пробивание слоном и ладьёй", () => AppSettings.EnablePierce, v => AppSettings.EnablePierce = v, "Да", "Нет");
-        AddToggle(col, "Пробивать сквозь свои", () => AppSettings.PierceThroughOwnPieces, v => AppSettings.PierceThroughOwnPieces = v, "Да", "Нет");
+        AddToggle(col, L.T("Подсказки ходов"), () => AppSettings.ShowMoveHints, v => AppSettings.ShowMoveHints = v, L.T("Вкл"), L.T("Выкл"));
+        AddToggle(col, L.T("Последний ход"), () => AppSettings.ShowLastMove, v => AppSettings.ShowLastMove = v, L.T("Подсвечивать"), L.T("Не подсвечивать"));
+        AddToggle(col, L.T("Подсказки под доской"), () => AppSettings.ShowHintText, v => AppSettings.ShowHintText = v, L.T("Вкл"), L.T("Выкл"));
+
+        Note(col, L.T("Способности загоревшихся фигур (для новых партий):"));
+        AddToggle(col, L.T("Троянский конь"), () => AppSettings.TrojanKnight, v => AppSettings.TrojanKnight = v, L.T("Да"), L.T("Нет"));
+        AddToggle(col, L.T("Ферзь ходит и как конь"), () => AppSettings.QueenMovesAsKnight, v => AppSettings.QueenMovesAsKnight = v, L.T("Да"), L.T("Нет"));
+        AddToggle(col, L.T("Пробивание слоном и ладьёй"), () => AppSettings.EnablePierce, v => AppSettings.EnablePierce = v, L.T("Да"), L.T("Нет"));
+        AddToggle(col, L.T("Пробивать сквозь свои"), () => AppSettings.PierceThroughOwnPieces, v => AppSettings.PierceThroughOwnPieces = v, L.T("Да"), L.T("Нет"));
         return col.gameObject;
     }
 

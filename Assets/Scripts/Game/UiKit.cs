@@ -320,6 +320,12 @@ public static class UiKit
     public static MenuButton CreateImageButton(Transform parent, string sprite, float height, Action onClick)
     {
         Sprite s = LoadSprite("UI/" + sprite);
+        // На кнопках-картинках русский текст — для английского рисуем такую же плашку с надписью.
+        if (L.English && L.ButtonLabels.TryGetValue(sprite, out string label))
+        {
+            float w = s != null ? height * s.rect.width / s.rect.height : height * 4f;
+            return CreatePlateButton(parent, label, new Vector2(w, height), onClick, Mathf.RoundToInt(height * 0.42f));
+        }
         float width = s != null ? height * s.rect.width / s.rect.height : height * 4f;
         var rt = CreateUi("Btn " + sprite, parent, typeof(Image), typeof(Button), typeof(MenuButton));
         rt.sizeDelta = new Vector2(width, height);

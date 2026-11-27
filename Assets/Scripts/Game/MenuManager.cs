@@ -76,8 +76,17 @@ public class MenuManager : MonoBehaviour
     private readonly List<MenuButton> mMusicButtons = new List<MenuButton>();
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
-    private static void Bootstrap()
+    internal static void Bootstrap()
     {
+        L.Reload();
+        // Steam живёт отдельно от интерфейса: при смене языка интерфейс пересобирается, а Steam — нет.
+        if (SteamService.Instance == null)
+        {
+            var steam = new GameObject("Steam");
+            DontDestroyOnLoad(steam);
+            steam.AddComponent<SteamService>();
+        }
+
         var game = FindAnyObjectByType<GameManager>();
         if (game == null)
             game = new GameObject("Chess2").AddComponent<GameManager>();
@@ -85,8 +94,6 @@ public class MenuManager : MonoBehaviour
             game.gameObject.AddComponent<AppPerformance>();
         if (game.GetComponent<SoundManager>() == null)
             game.gameObject.AddComponent<SoundManager>();
-        if (game.GetComponent<SteamService>() == null)
-            game.gameObject.AddComponent<SteamService>();
         if (game.GetComponent<MenuManager>() == null)
             game.gameObject.AddComponent<MenuManager>();
     }
@@ -107,6 +114,12 @@ public class MenuManager : MonoBehaviour
         UiKit.EnsureEventSystem();
         BuildUi();
         Show(Screen.Main);
+        if (sReopenOptions)
+        {
+            // Язык сменили в опциях главного меню — возвращаемся туда же.
+            sReopenOptions = false;
+            OpenOptions(Screen.Main);
+        }
 
         SteamService steam = SteamService.Instance;
         if (steam != null && steam.Ready)
@@ -245,7 +258,7 @@ public class MenuManager : MonoBehaviour
         for (int i = 0; i < mLessonButtons.Count; i++)
         {
             Lesson l = Tutorial.Lessons[i];
-            mLessonButtons[i].SetText((i + 1) + ". " + l.Title + (AppSettings.IsLessonDone(l.Id) ? "  (пройден)" : ""));
+            mLessonButtons[i].SetText((i + 1) + ". " + L.T(l.Title) + (AppSettings.IsLessonDone(l.Id) ? L.T("  (пройден)") : ""));
         }
     }
 
@@ -272,16 +285,56 @@ public class MenuManager : MonoBehaviour
     private void ToMainMenu()
     {
         mGame.StopGame();
+        if (mLanguagePending)
+        {
+            ReloadForLanguage(false);
+            return;
+        }
         Show(Screen.Main);
     }
+
+    #region Смена языка
+
+    private static bool sReopenOptions;
+    private bool mLanguagePending;
+
+    /// <summary>
+    /// Язык сменили в опциях. Вне партии интерфейс пересобирается сразу,
+    /// в партии — когда игрок выйдет в главное меню (партия при этом сохранится).
+    /// </summary>
+    private void OnLanguageChanged()
+    {
+        bool changed = L.English != L.WouldBeEnglish;
+        if (mGame.State == null)
+        {
+            if (changed)
+                ReloadForLanguage(true);
+            return;
+        }
+        mLanguagePending = changed;
+        mOptions.ShowLanguagePending(changed);
+    }
+
+    /// <summary>Пересобрать весь интерфейс на новом языке (Steam, сохранения и настройки не трогаются).</summary>
+    private void ReloadForLanguage(bool reopenOptions)
+    {
+        mGame.StopGame(); // партия сохраняется
+        AppSettings.Save();
+        sReopenOptions = reopenOptions;
+        L.Reload();
+        new GameObject("Language Reload").AddComponent<LanguageReload>();
+        Destroy(gameObject); // объект игры целиком: меню, доска, звук; через кадр он соберётся заново
+    }
+
+    #endregion
 
     private void OnGameEnded(GameState state)
     {
         mGameOverText.text = mGame.ResultText(state);
         bool net = mGame.Net != null && mGame.Net.Transport.Status == TransportStatus.Connected;
-        mAgainButton.SetText(mGame.Net != null ? "Реванш" : "Ещё раз");
+        mAgainButton.SetText(mGame.Net != null ? L.T("Реванш") : L.T("Ещё раз"));
         mAgainButton.gameObject.SetActive(mGame.Net == null || net);
-        mGameOverInfo.text = mGame.Net != null && mGame.Net.RemoteWantsRematch ? "Соперник предлагает реванш!" : "";
+        mGameOverInfo.text = mGame.Net != null && mGame.Net.RemoteWantsRematch ? L.T("Соперник предлагает реванш!") : "";
         StartCoroutine(ShowGameOverLater());
     }
 
@@ -292,7 +345,7 @@ public class MenuManager : MonoBehaviour
         if (mGame.Net != null)
         {
             mGame.RequestRematch();
-            mGameOverInfo.text = "Ждём ответа соперника…";
+            mGameOverInfo.text = L.T("Ждём ответа соперника…");
             return;
         }
         mGame.Restart();
@@ -302,7 +355,7 @@ public class MenuManager : MonoBehaviour
     private void OnRematchOffered()
     {
         if (mGameOverInfo != null)
-            mGameOverInfo.text = "Соперник предлагает реванш!";
+            mGameOverInfo.text = L.T("Соперник предлагает реванш!");
     }
 
     private void OnNetGameStarted()
@@ -346,10 +399,10 @@ public class MenuManager : MonoBehaviour
         mWaitAction.gameObject.SetActive(false);
 
         var addresses = NetInfo.LocalAddresses();
-        mWaitTitle.text = "Ждём соперника…";
-        mWaitText.text = "Скажи сопернику один из адресов и порт " + TcpTransport.DefaultPort + ":\n\n"
-                         + (addresses.Count > 0 ? string.Join("\n", addresses) : "(не удалось узнать адреса)")
-                         + "\n\nНа этом же компьютере — 127.0.0.1. Через интернет нужен Radmin VPN\nили открытый порт на роутере.";
+        mWaitTitle.text = L.T("Ждём соперника…");
+        mWaitText.text = L.T("Скажи сопернику один из адресов и порт ") + TcpTransport.DefaultPort + ":\n\n"
+                         + (addresses.Count > 0 ? string.Join("\n", addresses) : L.T("(не удалось узнать адреса)"))
+                         + L.T("\n\nНа этом же компьютере — 127.0.0.1. Через интернет нужен Radmin VPN\nили открытый порт на роутере.");
         mWaitStatus.text = "";
         Show(Screen.Waiting);
     }
@@ -359,7 +412,7 @@ public class MenuManager : MonoBehaviour
         mJoinError.text = "";
         if (!NetInfo.TryParseEndpoint(mAddressField.text, out string host, out int port))
         {
-            mJoinError.text = "Введи адрес, например 192.168.1.5 или 26.12.34.56:7777";
+            mJoinError.text = L.T("Введи адрес, например 192.168.1.5 или 26.12.34.56:7777");
             return;
         }
         AppSettings.LastAddress = mAddressField.text.Trim();
@@ -368,8 +421,8 @@ public class MenuManager : MonoBehaviour
         mPendingNet?.Close();
         mPendingNet = NetMatch.Join(host, port);
         mWaitAction.gameObject.SetActive(false);
-        mWaitTitle.text = "Подключаемся…";
-        mWaitText.text = $"Адрес: {host}, порт {port}";
+        mWaitTitle.text = L.T("Подключаемся…");
+        mWaitText.text = L.F("Адрес: {0}, порт {1}", host, port);
         mWaitStatus.text = "";
         Show(Screen.Waiting);
     }
@@ -393,16 +446,16 @@ public class MenuManager : MonoBehaviour
         SteamService steam = SteamService.Instance;
         if (steam == null || !steam.Ready)
         {
-            mWaitTitle.text = "Steam недоступен";
-            mWaitText.text = (steam?.InitError ?? "Steam не запущен")
-                             + "\n\nЗапусти Steam, войди в аккаунт и перезапусти игру.\nА пока можно играть по IP.";
+            mWaitTitle.text = L.T("Steam недоступен");
+            mWaitText.text = (steam?.InitError ?? L.T("Steam не запущен"))
+                             + L.T("\n\nЗапусти Steam, войди в аккаунт и перезапусти игру.\nА пока можно играть по IP.");
             mWaitStatus.text = "";
             mWaitAction.gameObject.SetActive(false);
             Show(Screen.Waiting);
             return;
         }
         mHostViaSteam = true;
-        mHostTitle.text = "Игра с другом в Steam";
+        mHostTitle.text = L.T("Игра с другом в Steam");
         Show(Screen.HostSetup);
     }
 
@@ -414,12 +467,12 @@ public class MenuManager : MonoBehaviour
         INetTransport transport = SteamService.Instance.HostLobby();
         mPendingNet = NetMatch.Create(NetRole.Host, transport, TemplateFromSettings());
 
-        mWaitTitle.text = "Пригласи друга";
-        mWaitText.text = "Открылось окно Steam: выбери друга и нажми «Пригласить».\n\n"
-                         + "Друг примет приглашение в Steam — игра у него запустится и подключится сама.\n"
-                         + "Окно не открылось? Нажми «Пригласить» ниже или Shift+Tab.\n\n"
-                         + "(Оверлей Steam работает в собранной игре; в редакторе Unity его обычно нет.)";
-        mWaitStatus.text = "Создаём лобби…";
+        mWaitTitle.text = L.T("Пригласи друга");
+        mWaitText.text = L.T("Открылось окно Steam: выбери друга и нажми «Пригласить».\n\n")
+                         + L.T("Друг примет приглашение в Steam — игра у него запустится и подключится сама.\n")
+                         + L.T("Окно не открылось? Нажми «Пригласить» ниже или Shift+Tab.\n\n")
+                         + L.T("(Оверлей Steam работает в собранной игре; в редакторе Unity его обычно нет.)");
+        mWaitStatus.text = L.T("Создаём лобби…");
         mWaitAction.gameObject.SetActive(true);
         Show(Screen.Waiting);
     }
@@ -430,7 +483,7 @@ public class MenuManager : MonoBehaviour
         // Посреди своей партии чужое приглашение не принимаем.
         if (mGame.State != null && !mGame.State.IsOver)
         {
-            mGame.ShowBanner("Приглашение в Steam: сначала закончи текущую партию");
+            mGame.ShowBanner(L.T("Приглашение в Steam: сначала закончи текущую партию"));
             return;
         }
         mGame.StopGame();
@@ -438,8 +491,8 @@ public class MenuManager : MonoBehaviour
         INetTransport transport = SteamService.Instance.JoinLobby(lobby);
         mPendingNet = NetMatch.Create(NetRole.Guest, transport);
 
-        mWaitTitle.text = "Подключаемся к другу…";
-        mWaitText.text = "Входим в лобби Steam.";
+        mWaitTitle.text = L.T("Подключаемся к другу…");
+        mWaitText.text = L.T("Входим в лобби Steam.");
         mWaitStatus.text = "";
         mWaitAction.gameObject.SetActive(false);
         Show(Screen.Waiting);
@@ -455,10 +508,10 @@ public class MenuManager : MonoBehaviour
         if (mPendingNet.Transport.Status == TransportStatus.Connected && mWaitStatus != null)
         {
             string friend = SteamService.Instance != null ? SteamService.Instance.OpponentName(mPendingNet.Transport) : "";
-            mWaitStatus.text = (friend.Length > 0 ? friend + " на связи" : "Соединение есть") + ", договариваемся о партии…";
+            mWaitStatus.text = (friend.Length > 0 ? friend + L.T(" на связи") : L.T("Соединение есть")) + L.T(", договариваемся о партии…");
         }
         else if (SteamService.Instance != null && SteamService.Instance.IsLobbyReady(mPendingNet.Transport) && mWaitStatus != null)
-            mWaitStatus.text = "Лобби создано, ждём друга…";
+            mWaitStatus.text = L.T("Лобби создано, ждём друга…");
 
         foreach (NetEvent e in mPendingNet.Poll())
         {
@@ -472,7 +525,7 @@ public class MenuManager : MonoBehaviour
             }
             if (e.Kind == NetEventKind.Disconnected)
             {
-                mWaitStatus.text = string.IsNullOrEmpty(e.Text) ? "Соединение закрыто" : e.Text;
+                mWaitStatus.text = string.IsNullOrEmpty(e.Text) ? L.T("Соединение закрыто") : e.Text;
                 mPendingNet.Close();
                 mPendingNet = null;
                 return;
@@ -523,6 +576,7 @@ public class MenuManager : MonoBehaviour
         mScreens[Screen.Waiting] = BuildWaiting();
         mScreens[Screen.Options] = mOptions.Build(mCanvas.transform, CloseOptions,
             (parent, text, size, offset) => Title(parent, text, size, offset), BottomBar);
+        mOptions.LanguageChanged += OnLanguageChanged;
         mScreens[Screen.Pause] = BuildPause();
         mScreens[Screen.GameOver] = BuildGameOver();
         mScreens[Screen.Lessons] = BuildLessons();
@@ -546,8 +600,8 @@ public class MenuManager : MonoBehaviour
     {
         var root = ScreenRoot("Main", UiKit.Background);
 
-        Title(root, "ПЕПЕЛ И КОРОНА", 96, new Vector2(0, -110));
-        var sub = UiKit.CreateText("Subtitle", root, "фигуры не умирают — они слабеют", 30, new Color(0.8f, 0.85f, 0.8f, 1f));
+        Title(root, L.T("ПЕПЕЛ И КОРОНА"), 96, new Vector2(0, -110));
+        var sub = UiKit.CreateText("Subtitle", root, L.T("фигуры не умирают — они слабеют"), 30, new Color(0.8f, 0.85f, 0.8f, 1f));
         Place(sub.transform, new Vector2(0.5f, 1), new Vector2(0, -200));
         ((RectTransform)sub.transform).sizeDelta = new Vector2(1000, 40); // строка занимает 200..240 от верха
 
@@ -558,7 +612,7 @@ public class MenuManager : MonoBehaviour
         mContinueButton = UiKit.CreateImageButton(col, "continue", BigButtonHeight, ContinueSaved);
         UiKit.CreateImageButton(col, "play_bot", BigButtonHeight, () => Show(Screen.BotSetup));
         UiKit.CreateImageButton(col, "play_players", BigButtonHeight, () => Show(Screen.Players));
-        UiKit.CreatePlateButton(col, "Обучение", new Vector2(361, BigButtonHeight), () => Show(Screen.Lessons), 38);
+        UiKit.CreatePlateButton(col, L.T("Обучение"), new Vector2(361, BigButtonHeight), () => Show(Screen.Lessons), 38);
         UiKit.CreateImageButton(col, "options", BigButtonHeight, () => OpenOptions(Screen.Main));
         if (Platform.CanQuit)
             UiKit.CreateImageButton(col, "exit", BigButtonHeight, Quit);
@@ -566,7 +620,7 @@ public class MenuManager : MonoBehaviour
         SoundToggles(root);
 
         // «Статистика» — в левом верхнем углу (справа вверху — звук и музыка).
-        var stats = UiKit.CreatePlateButton(root, "Статистика", new Vector2(240, 64), () => Show(Screen.Stats), 28);
+        var stats = UiKit.CreatePlateButton(root, L.T("Статистика"), new Vector2(240, 64), () => Show(Screen.Stats), 28);
         Place(stats.transform, new Vector2(0, 1), new Vector2(40 + 120, -64));
         return root.gameObject;
     }
@@ -574,14 +628,14 @@ public class MenuManager : MonoBehaviour
     private GameObject BuildBotSetup()
     {
         var root = ScreenRoot("BotSetup", UiKit.Background);
-        Title(root, "Игра с ботом", 64, new Vector2(0, -50));
+        Title(root, L.T("Игра с ботом"), 64, new Vector2(0, -50));
 
         var col = UiKit.CreateColumn("Content", root, 8);
         Place(col, new Vector2(0.5f, 0.5f), new Vector2(0, 20));
 
-        Label(col, "Сложность");
+        Label(col, L.T("Сложность"));
         var row = UiKit.CreateRow("Difficulty", col, 14);
-        string[] diff = { "Новичок", "Любитель", "Сильный", "Мастер" };
+        string[] diff = { L.T("Новичок"), L.T("Любитель"), L.T("Сильный"), L.T("Мастер") };
         for (int i = 0; i < diff.Length; i++)
         {
             var level = (BotDifficulty)i;
@@ -592,9 +646,9 @@ public class MenuManager : MonoBehaviour
             }));
         }
 
-        Label(col, "Твой цвет");
+        Label(col, L.T("Твой цвет"));
         row = UiKit.CreateRow("Color", col, 14);
-        string[] colors = { "Белые", "Чёрные", "Случайно" };
+        string[] colors = { L.T("Белые"), L.T("Чёрные"), L.T("Случайно") };
         for (int i = 0; i < colors.Length; i++)
         {
             int c = i;
@@ -605,10 +659,10 @@ public class MenuManager : MonoBehaviour
             }));
         }
 
-        Label(col, "Время на партию");
+        Label(col, L.T("Время на партию"));
         TimeRow(col, mBotTimeButtons);
 
-        Label(col, "Режим");
+        Label(col, L.T("Режим"));
         mBotModeHint = ModeRow(col, mBotModeButtons);
 
         BottomBar(root, () => Show(Screen.Main), "continue", StartBotGame);
@@ -619,21 +673,21 @@ public class MenuManager : MonoBehaviour
     private GameObject BuildPlayers()
     {
         var root = ScreenRoot("Players", UiKit.Background);
-        Title(root, "Игра с игроками", 64, new Vector2(0, -70));
+        Title(root, L.T("Игра с игроками"), 64, new Vector2(0, -70));
 
         var col = UiKit.CreateColumn("Content", root, 22);
         Place(col, new Vector2(0.5f, 0.5f), new Vector2(0, 10));
         var size = new Vector2(560, BigButtonHeight);
-        UiKit.CreatePlateButton(col, "За одним компьютером", size, () => Show(Screen.LocalSetup), 34);
+        UiKit.CreatePlateButton(col, L.T("За одним компьютером"), size, () => Show(Screen.LocalSetup), 34);
         if (SteamService.Supported)
-            UiKit.CreatePlateButton(col, "Играть с другом в Steam", size, OpenSteamSetup, 34);
-        UiKit.CreatePlateButton(col, "Создать игру по сети", size, () =>
+            UiKit.CreatePlateButton(col, L.T("Играть с другом в Steam"), size, OpenSteamSetup, 34);
+        UiKit.CreatePlateButton(col, L.T("Создать игру по сети"), size, () =>
         {
             mHostViaSteam = false;
-            mHostTitle.text = "Создать игру по сети";
+            mHostTitle.text = L.T("Создать игру по сети");
             Show(Screen.HostSetup);
         }, 34);
-        UiKit.CreatePlateButton(col, "Подключиться по IP", size, () =>
+        UiKit.CreatePlateButton(col, L.T("Подключиться по IP"), size, () =>
         {
             mAddressField.text = AppSettings.LastAddress;
             mJoinError.text = "";
@@ -642,8 +696,8 @@ public class MenuManager : MonoBehaviour
 
         var info = UiKit.CreateText("Info", col,
             SteamService.Supported
-                ? "Через Steam — приглашение другу, ничего настраивать не нужно.\nПо IP — в локальной сети, через Radmin VPN или по интернету."
-                : "По IP — в одной сети Wi-Fi, через VPN или по интернету.\nИграть можно и с ПК: версии совместимы.",
+                ? L.T("Через Steam — приглашение другу, ничего настраивать не нужно.\nПо IP — в локальной сети, через Radmin VPN или по интернету.")
+                : L.T("По IP — в одной сети Wi-Fi, через VPN или по интернету.\nИграть можно и с ПК: версии совместимы."),
             24, new Color(0.75f, 0.8f, 0.75f, 1f));
         ((RectTransform)info.transform).sizeDelta = new Vector2(1000, 80);
 
@@ -655,14 +709,14 @@ public class MenuManager : MonoBehaviour
     private GameObject BuildHostSetup()
     {
         var root = ScreenRoot("HostSetup", UiKit.Background);
-        mHostTitle = Title(root, "Создать игру по сети", 64, new Vector2(0, -60));
+        mHostTitle = Title(root, L.T("Создать игру по сети"), 64, new Vector2(0, -60));
 
         var col = UiKit.CreateColumn("Content", root, 10);
         Place(col, new Vector2(0.5f, 0.5f), new Vector2(0, 20));
 
-        Label(col, "Твой цвет");
+        Label(col, L.T("Твой цвет"));
         var row = UiKit.CreateRow("Color", col, 14);
-        string[] colors = { "Белые", "Чёрные", "Случайно" };
+        string[] colors = { L.T("Белые"), L.T("Чёрные"), L.T("Случайно") };
         for (int i = 0; i < colors.Length; i++)
         {
             int c = i;
@@ -673,10 +727,10 @@ public class MenuManager : MonoBehaviour
             }));
         }
 
-        Label(col, "Время на партию");
+        Label(col, L.T("Время на партию"));
         TimeRow(col, mHostTimeButtons);
 
-        Label(col, "Режим");
+        Label(col, L.T("Режим"));
         mHostModeHint = ModeRow(col, mHostModeButtons);
 
         BottomBar(root, () => Show(Screen.Players), "continue", StartHosting);
@@ -687,17 +741,17 @@ public class MenuManager : MonoBehaviour
     private GameObject BuildJoin()
     {
         var root = ScreenRoot("Join", UiKit.Background);
-        Title(root, "Подключиться по IP", 64, new Vector2(0, -70));
+        Title(root, L.T("Подключиться по IP"), 64, new Vector2(0, -70));
 
         var col = UiKit.CreateColumn("Content", root, 16);
         Place(col, new Vector2(0.5f, 0.5f), new Vector2(0, 20));
 
-        Label(col, "Адрес соперника");
-        mAddressField = UiKit.CreateInputField(col, new Vector2(620, 72), "например 192.168.1.5");
+        Label(col, L.T("Адрес соперника"));
+        mAddressField = UiKit.CreateInputField(col, new Vector2(620, 72), L.T("например 192.168.1.5"));
 
         var hint = UiKit.CreateText("Hint", col,
-            "Адрес покажет соперник на экране «Создать игру по сети».\nПорт по умолчанию " + TcpTransport.DefaultPort
-            + ", другой можно указать через двоеточие: 26.12.34.56:7777",
+            L.T("Адрес покажет соперник на экране «Создать игру по сети».\nПорт по умолчанию ") + TcpTransport.DefaultPort
+            + L.T(", другой можно указать через двоеточие: 26.12.34.56:7777"),
             22, new Color(0.75f, 0.8f, 0.75f, 1f));
         ((RectTransform)hint.transform).sizeDelta = new Vector2(1000, 70);
 
@@ -723,7 +777,7 @@ public class MenuManager : MonoBehaviour
         mWaitStatus = UiKit.CreateText("Status", col, "", 26, new Color32(255, 200, 120, 255));
         ((RectTransform)mWaitStatus.transform).sizeDelta = new Vector2(1100, 40);
 
-        mWaitAction = UiKit.CreatePlateButton(col, "Пригласить", new Vector2(360, 72),
+        mWaitAction = UiKit.CreatePlateButton(col, L.T("Пригласить"), new Vector2(360, 72),
             () => SteamService.Instance?.OpenInviteDialog(), 34);
         mWaitAction.gameObject.SetActive(false);
 
@@ -734,18 +788,18 @@ public class MenuManager : MonoBehaviour
     private GameObject BuildLocalSetup()
     {
         var root = ScreenRoot("LocalSetup", UiKit.Background);
-        Title(root, "За одним компьютером", 64, new Vector2(0, -70));
+        Title(root, L.T("За одним компьютером"), 64, new Vector2(0, -70));
 
         var col = UiKit.CreateColumn("Content", root, 18);
         Place(col, new Vector2(0.5f, 0.5f), new Vector2(0, 20));
 
-        var info = UiKit.CreateText("Info", col, "Вдвоём за одним компьютером, ходите по очереди.", 28, UiKit.TextLight);
+        var info = UiKit.CreateText("Info", col, L.T("Вдвоём за одним компьютером, ходите по очереди."), 28, UiKit.TextLight);
         ((RectTransform)info.transform).sizeDelta = new Vector2(1000, 50);
 
-        Label(col, "Время на партию");
+        Label(col, L.T("Время на партию"));
         TimeRow(col, mLocalTimeButtons);
 
-        Label(col, "Режим");
+        Label(col, L.T("Режим"));
         mLocalModeHint = ModeRow(col, mLocalModeButtons);
 
         BottomBar(root, () => Show(Screen.Players), "continue", StartLocalGame);
@@ -756,17 +810,17 @@ public class MenuManager : MonoBehaviour
     private GameObject BuildLessons()
     {
         var root = ScreenRoot("Lessons", UiKit.Background);
-        Title(root, "Обучение", 64, new Vector2(0, -50));
+        Title(root, L.T("Обучение"), 64, new Vector2(0, -50));
 
         var col = UiKit.CreateColumn("Lessons", root, 12);
         Place(col, new Vector2(0.5f, 0.5f), new Vector2(0, -10));
         foreach (Lesson lesson in Tutorial.Lessons)
         {
             Lesson l = lesson;
-            mLessonButtons.Add(UiKit.CreatePlateButton(col, l.Title, new Vector2(520, 66), () => StartLesson(l), 30));
+            mLessonButtons.Add(UiKit.CreatePlateButton(col, L.T(l.Title), new Vector2(520, 66), () => StartLesson(l), 30));
         }
 
-        var hint = UiKit.CreateText("Hint", root, "Короткие задания на доске: правила «Пепла и короны» за пять минут.",
+        var hint = UiKit.CreateText("Hint", root, L.T("Короткие задания на доске: правила «Пепла и короны» за пять минут."),
             22, new Color(0.8f, 0.85f, 0.88f, 1f));
         Place(hint.transform, new Vector2(0.5f, 1), new Vector2(0, -130));
 
@@ -777,13 +831,13 @@ public class MenuManager : MonoBehaviour
     private GameObject BuildStats()
     {
         var root = ScreenRoot("Stats", UiKit.Background);
-        Title(root, "Статистика", 64, new Vector2(0, -50));
+        Title(root, L.T("Статистика"), 64, new Vector2(0, -50));
 
         var table = UiKit.CreateColumn("Table", root, 6);
         Place(table, new Vector2(0.5f, 1), new Vector2(0, -170));
 
-        string[] header = { "", "Победы", "Поражения", "Ничьи" };
-        string[] labels = { "Бот: новичок", "Бот: любитель", "Бот: сильный", "Бот: мастер", "По сети", "Вдвоём*" };
+        string[] header = { "", L.T("Победы"), L.T("Поражения"), L.T("Ничьи") };
+        string[] labels = { L.T("Бот: новичок"), L.T("Бот: любитель"), L.T("Бот: сильный"), L.T("Бот: мастер"), L.T("По сети"), L.T("Вдвоём*") };
         var light = new Color(0.82f, 0.86f, 0.9f, 1f);
 
         RectTransform row = UiKit.CreateRow("Header", table, 0);
@@ -801,13 +855,13 @@ public class MenuManager : MonoBehaviour
         ((RectTransform)mStatsSummary.transform).sizeDelta = new Vector2(1100, 120);
         Place(mStatsSummary.transform, new Vector2(0.5f, 1), new Vector2(0, -560));
 
-        mStatsReset = UiKit.CreatePlateButton(root, "Сбросить", new Vector2(300, 64), ResetStats, 28);
+        mStatsReset = UiKit.CreatePlateButton(root, L.T("Сбросить"), new Vector2(300, 64), ResetStats, 28);
         var rrt = (RectTransform)mStatsReset.transform;
         rrt.anchorMin = rrt.anchorMax = rrt.pivot = new Vector2(1, 0);
         rrt.anchoredPosition = new Vector2(-60, 60);
 
         // «Достижения» — внизу по центру.
-        var ach = UiKit.CreatePlateButton(root, "Достижения", new Vector2(320, 72), () => Show(Screen.Achievements), 30);
+        var ach = UiKit.CreatePlateButton(root, L.T("Достижения"), new Vector2(320, 72), () => Show(Screen.Achievements), 30);
         var art = (RectTransform)ach.transform;
         art.anchorMin = art.anchorMax = art.pivot = new Vector2(0.5f, 0);
         art.anchoredPosition = new Vector2(0, 56);
@@ -820,7 +874,7 @@ public class MenuManager : MonoBehaviour
     private GameObject BuildAchievements()
     {
         var root = ScreenRoot("Achievements", UiKit.Background);
-        Title(root, "Достижения", 64, new Vector2(0, -40));
+        Title(root, L.T("Достижения"), 64, new Vector2(0, -40));
         mAchHeader = UiKit.CreateText("Header", root, "", 26, new Color32(255, 215, 106, 255));
         ((RectTransform)mAchHeader.transform).sizeDelta = new Vector2(800, 36);
         Place(mAchHeader.transform, new Vector2(0.5f, 1), new Vector2(0, -118));
@@ -839,7 +893,7 @@ public class MenuManager : MonoBehaviour
         {
             var card = UiKit.CreateUi("Card", grid, typeof(Image));
             card.GetComponent<Image>().color = new Color32(16, 36, 48, 200);
-            var title = UiKit.CreateText("Title", card, def.Title, 24, UiKit.TextLight, TextAnchor.UpperLeft, shadow: false);
+            var title = UiKit.CreateText("Title", card, L.T(def.Title), 24, UiKit.TextLight, TextAnchor.UpperLeft, shadow: false);
             title.fontStyle = FontStyle.Bold;
             var trt = (RectTransform)title.transform;
             trt.anchorMin = new Vector2(0, 1);
@@ -847,7 +901,7 @@ public class MenuManager : MonoBehaviour
             trt.pivot = new Vector2(0.5f, 1);
             trt.offsetMin = new Vector2(16, -34);
             trt.offsetMax = new Vector2(-16, -6);
-            var desc = UiKit.CreateText("Desc", card, def.Description, 18, UiKit.TextLight, TextAnchor.LowerLeft, shadow: false);
+            var desc = UiKit.CreateText("Desc", card, L.T(def.Description), 18, UiKit.TextLight, TextAnchor.LowerLeft, shadow: false);
             var drt = (RectTransform)desc.transform;
             drt.anchorMin = new Vector2(0, 0);
             drt.anchorMax = new Vector2(1, 0);
@@ -864,11 +918,11 @@ public class MenuManager : MonoBehaviour
     private void RefreshAchievements()
     {
         int open = global::Achievements.UnlockedCount, total = global::Achievements.All.Count;
-        mAchHeader.text = $"Открыто: {open} из {total}";
+        mAchHeader.text = L.F("Открыто: {0} из {1}", open, total);
         foreach (var (def, title, desc) in mAchItems)
         {
             bool unlocked = global::Achievements.IsUnlocked(def.Id);
-            title.text = (unlocked ? "+ " : "") + def.Title;
+            title.text = (unlocked ? "+ " : "") + L.T(def.Title);
             title.color = unlocked ? new Color32(255, 215, 106, 255) : new Color32(140, 155, 165, 255);
             desc.color = unlocked ? new Color32(220, 228, 235, 255) : new Color32(120, 132, 140, 255);
         }
@@ -893,13 +947,13 @@ public class MenuManager : MonoBehaviour
             if (AppSettings.IsLessonDone(l.Id))
                 lessons++;
         mStatsSummary.text =
-            $"Сыграно партий: {GameStats.TotalGames}   ·   Серия побед: {GameStats.CurrentStreak} (лучшая — {GameStats.BestStreak})\n"
-            + $"Королей повержено: {GameStats.KingsFelled}   ·   Уроков пройдено: {lessons} из {Tutorial.Lessons.Count}\n"
-            + "<size=19>* Вдвоём: победы белых / победы чёрных / ничьи. Серия — против бота и по сети.</size>";
+            L.F("Сыграно партий: {0}   ·   Серия побед: {1} (лучшая — {2})", GameStats.TotalGames, GameStats.CurrentStreak, GameStats.BestStreak) + "\n"
+            + L.F("Королей повержено: {0}   ·   Уроков пройдено: {1} из {2}", GameStats.KingsFelled, lessons, Tutorial.Lessons.Count) + "\n"
+            + L.T("<size=19>* Вдвоём: победы белых / победы чёрных / ничьи. Серия — против бота и по сети.</size>");
         mStatsSummary.supportRichText = true;
 
         mStatsResetArmed = false;
-        mStatsReset.SetText("Сбросить");
+        mStatsReset.SetText(L.T("Сбросить"));
     }
 
     /// <summary>Сброс — только со второго нажатия.</summary>
@@ -908,7 +962,7 @@ public class MenuManager : MonoBehaviour
         if (!mStatsResetArmed)
         {
             mStatsResetArmed = true;
-            mStatsReset.SetText("Точно сбросить?");
+            mStatsReset.SetText(L.T("Точно сбросить?"));
             return;
         }
         GameStats.Reset();
@@ -918,17 +972,17 @@ public class MenuManager : MonoBehaviour
     private GameObject BuildPause()
     {
         var root = ScreenRoot("Pause", new Color(0.05f, 0.06f, 0.05f, 0.88f));
-        Title(root, "Пауза", 72, new Vector2(0, -110));
+        Title(root, L.T("Пауза"), 72, new Vector2(0, -110));
 
         var col = UiKit.CreateColumn("Buttons", root, 22);
         Place(col, new Vector2(0.5f, 0.5f), new Vector2(0, -40));
         UiKit.CreateImageButton(col, "continue", BigButtonHeight, ClosePause);
-        mRestartButton = UiKit.CreatePlateButton(col, "Заново", new Vector2(361, BigButtonHeight), () =>
+        mRestartButton = UiKit.CreatePlateButton(col, L.T("Заново"), new Vector2(361, BigButtonHeight), () =>
         {
             mGame.Restart();
             Show(Screen.None);
         }, 38);
-        mResignButton = UiKit.CreatePlateButton(col, "Сдаться", new Vector2(361, BigButtonHeight), () =>
+        mResignButton = UiKit.CreatePlateButton(col, L.T("Сдаться"), new Vector2(361, BigButtonHeight), () =>
         {
             Show(Screen.None);
             mGame.Resign();
@@ -947,8 +1001,8 @@ public class MenuManager : MonoBehaviour
 
         var col = UiKit.CreateColumn("Buttons", root, 22);
         Place(col, new Vector2(0.5f, 0.5f), new Vector2(0, -40));
-        mAgainButton = UiKit.CreatePlateButton(col, "Ещё раз", new Vector2(361, BigButtonHeight), PlayAgain, 38);
-        mReviewButton = UiKit.CreatePlateButton(col, "Разбор партии", new Vector2(361, 72), () =>
+        mAgainButton = UiKit.CreatePlateButton(col, L.T("Ещё раз"), new Vector2(361, BigButtonHeight), PlayAgain, 38);
+        mReviewButton = UiKit.CreatePlateButton(col, L.T("Разбор партии"), new Vector2(361, 72), () =>
         {
             mGame.StartReview();
             if (mGame.Reviewing)
@@ -956,7 +1010,7 @@ public class MenuManager : MonoBehaviour
         }, 32);
         UiKit.CreateImageButton(col, "menu", BigButtonHeight, ToMainMenu);
         // Можно закрыть окно и посмотреть на доску.
-        UiKit.CreatePlateButton(col, "Посмотреть доску", new Vector2(361, 64), () => Show(Screen.None), 26);
+        UiKit.CreatePlateButton(col, L.T("Посмотреть доску"), new Vector2(361, 64), () => Show(Screen.None), 26);
         return root.gameObject;
     }
 
@@ -995,8 +1049,8 @@ public class MenuManager : MonoBehaviour
             buttons[i].SetSelected(i == mode);
         if (hint != null)
             hint.text = mode == 0
-                ? "Шахматы с деградацией. После мата король уходит, а 1–3 фигуры его армии загораются и получают силу.\nАрмия без короля побеждает матом второму королю и проигрывает, когда фигур не осталось."
-                : "Все способности у всех фигур сразу. Король слабеет как все, шаха нет.\nПобеда — когда у соперника не осталось ни одной фигуры.";
+                ? L.T("Шахматы с деградацией. После мата король уходит, а 1–3 фигуры его армии загораются и получают силу.\nАрмия без короля побеждает матом второму королю и проигрывает, когда фигур не осталось.")
+                : L.T("Все способности у всех фигур сразу. Король слабеет как все, шаха нет.\nПобеда — когда у соперника не осталось ни одной фигуры.");
     }
 
     private void ToggleSound()
@@ -1019,7 +1073,7 @@ public class MenuManager : MonoBehaviour
             b.SetSprite(UiKit.LoadSprite(AppSettings.Music ? "UI/music" : "UI/music_off"));
     }
 
-    private static string YesNo(bool v) => v ? "да" : "нет";
+    private static string YesNo(bool v) => v ? L.T("да") : L.T("нет");
 
     #endregion
 
@@ -1055,7 +1109,7 @@ public class MenuManager : MonoBehaviour
         foreach (int minutes in AppSettings.TimeOptions)
         {
             int m = minutes;
-            string label = m == 0 ? "Без времени" : m + " мин";
+            string label = m == 0 ? L.T("Без времени") : m + L.T(" мин");
             into.Add(UiKit.CreatePlateButton(row, label, new Vector2(m == 0 ? 250 : 170, 60), () =>
             {
                 AppSettings.TimeMinutes = m;
@@ -1067,12 +1121,12 @@ public class MenuManager : MonoBehaviour
     private Text ModeRow(Transform parent, List<MenuButton> into)
     {
         var row = UiKit.CreateRow("Mode", parent, 14);
-        into.Add(UiKit.CreatePlateButton(row, "Корона", new Vector2(300, 66), () =>
+        into.Add(UiKit.CreatePlateButton(row, L.T("Корона"), new Vector2(300, 66), () =>
         {
             AppSettings.Mode = 0;
             RefreshSetup();
         }));
-        into.Add(UiKit.CreatePlateButton(row, "Хаос", new Vector2(300, 66), () =>
+        into.Add(UiKit.CreatePlateButton(row, L.T("Хаос"), new Vector2(300, 66), () =>
         {
             AppSettings.Mode = 1;
             RefreshSetup();

@@ -98,6 +98,7 @@ public class AchievementToast : MonoBehaviour
     private static AchievementToast sInstance;
     private readonly Queue<Achievements.Def> mQueue = new Queue<Achievements.Def>();
     private RectTransform mPlate;
+    private Text mHead;
     private Text mTitle;
     private Text mDescription;
     private bool mShowing;
@@ -131,7 +132,8 @@ public class AchievementToast : MonoBehaviour
         img.raycastTarget = false;
         sInstance.mPlate = plate;
 
-        var head = UiKit.CreateText("Head", plate, "Достижение открыто!", 22, new Color32(31, 79, 99, 255), shadow: false);
+        var head = UiKit.CreateText("Head", plate, L.T("Достижение открыто!"), 22, new Color32(31, 79, 99, 255), shadow: false);
+        sInstance.mHead = head;
         var hrt = (RectTransform)head.transform;
         hrt.anchoredPosition = new Vector2(0, 30);
         hrt.sizeDelta = new Vector2(560, 30);
@@ -156,8 +158,9 @@ public class AchievementToast : MonoBehaviour
         while (mQueue.Count > 0)
         {
             Achievements.Def def = mQueue.Dequeue();
-            mTitle.text = def.Title;
-            mDescription.text = def.Description;
+            mTitle.text = L.T(def.Title);
+            mDescription.text = L.T(def.Description);
+            mHead.text = L.T("Достижение открыто!");
             mPlate.gameObject.SetActive(true);
             SoundManager.Play("empower", 0.9f, 0f);
 

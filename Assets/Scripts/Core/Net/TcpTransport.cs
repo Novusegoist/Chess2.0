@@ -55,7 +55,7 @@ namespace Chess2.Core.Net
             }
             catch (Exception e)
             {
-                Fail("Не удалось открыть порт " + port + ": " + e.Message);
+                Fail(CoreText.T("Не удалось открыть порт ") + port + ": " + e.Message);
             }
         }
 
@@ -70,7 +70,7 @@ namespace Chess2.Core.Net
             }
             catch (Exception e)
             {
-                Fail("Не удалось подключиться: " + e.Message);
+                Fail(CoreText.T("Не удалось подключиться: ") + e.Message);
             }
         }
 
@@ -88,7 +88,7 @@ namespace Chess2.Core.Net
             }
             catch (Exception e)
             {
-                Fail("Соединение потеряно: " + e.Message);
+                Fail(CoreText.T("Соединение потеряно: ") + e.Message);
                 return false;
             }
         }
@@ -119,7 +119,7 @@ namespace Chess2.Core.Net
             }
             catch (Exception e)
             {
-                Fail("Ошибка при подключении соперника: " + e.Message);
+                Fail(CoreText.T("Ошибка при подключении соперника: ") + e.Message);
             }
         }
 
@@ -136,7 +136,7 @@ namespace Chess2.Core.Net
             }
             catch (Exception e)
             {
-                Fail("Не удалось подключиться: " + e.Message);
+                Fail(CoreText.T("Не удалось подключиться: ") + e.Message);
             }
         }
 
@@ -170,7 +170,7 @@ namespace Chess2.Core.Net
             catch (Exception e)
             {
                 if (_status != TransportStatus.Closed)
-                    Fail("Соединение потеряно: " + e.Message);
+                    Fail(CoreText.T("Соединение потеряно: ") + e.Message);
             }
         }
 
