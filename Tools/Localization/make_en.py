@@ -7,8 +7,14 @@ keys.txt (русские строки, по одной на строку, как
 import os
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-keys = open(os.path.join(HERE, 'keys.txt'), encoding='utf-8').read().rstrip('\n').split('\n')
-en = open(os.path.join(HERE, 'en.txt'), encoding='utf-8').read().rstrip('\n').split('\n')
+def read_lines(name):
+    # Git на Windows может отдать файл с CRLF — убираем \r, чтобы он не попал в ключи.
+    text = open(os.path.join(HERE, name), encoding='utf-8').read().replace('\r', '')
+    return text.rstrip('\n').split('\n')
+
+
+keys = read_lines('keys.txt')
+en = read_lines('en.txt')
 if len(keys) != len(en):
     raise SystemExit(f'Разное число строк: keys {len(keys)}, en {len(en)}')
 
