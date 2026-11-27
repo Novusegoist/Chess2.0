@@ -72,6 +72,9 @@ public class GameManager : MonoBehaviour
     private int mSelected = Sq.None;
     private readonly List<GameState> mHistory = new List<GameState>(); // позиции перед каждым ходом — для «Ход назад»
     private MenuButton mUndoButton;
+    private MenuButton mHintButton;
+    private Task<Move?> mHintTask;
+    private CancellationTokenSource mHintCancel;
     private List<Move> mSelectedMoves = new List<Move>();
     private readonly List<MoveEffect> mEffects = new List<MoveEffect>();
 
@@ -315,6 +318,11 @@ public class GameManager : MonoBehaviour
     {
         if (mUndoButton == null)
             return;
+        PollHint();
+        bool hint = CanHint;
+        if (mHintButton.gameObject.activeSelf != hint)
+            mHintButton.gameObject.SetActive(hint);
+
         bool show = CanUndo;
         if (mUndoButton.gameObject.activeSelf != show)
             mUndoButton.gameObject.SetActive(show);
@@ -331,6 +339,101 @@ public class GameManager : MonoBehaviour
 #else
         return Input.GetKeyDown(KeyCode.Z) && (Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl));
 #endif
+    }
+
+    #endregion
+
+    #region Подсказка
+
+    /// <summary>
+    /// Подсказка — в партии с ботом (в свой ход) и вдвоём; не по сети и не в уроке.
+    /// Пока ищем ход, кнопка скрыта.
+    /// </summary>
+    public bool CanHint => State != null && !State.IsOver && Net == null && Lesson == null
+                           && !IsBotTurn && !Paused && mHintTask == null;
+
+    /// <summary>«Подсказка»: бот уровня «сильный» ищет хороший ход за текущую сторону.</summary>
+    public void RequestHint()
+    {
+        if (!CanHint)
+            return;
+        GameState snapshot = State.Clone();
+        var settings = BotSettings.For(BotDifficulty.Hard);
+        settings.TimeLimitMs = 1200;
+        var bot = new Bot(settings);
+        mHintCancel = new CancellationTokenSource();
+        CancellationToken token = mHintCancel.Token;
+#if UNITY_WEBGL && !UNITY_EDITOR
+        mHintTask = Task.FromResult(bot.FindBestMove(snapshot, token));
+#else
+        mHintTask = Task.Run(() => bot.FindBestMove(snapshot, token));
+#endif
+        if (mHintText != null)
+            mHintText.text = "Ищу хороший ход…";
+    }
+
+    private void CancelHint()
+    {
+        if (mHintCancel != null)
+        {
+            mHintCancel.Cancel();
+            mHintCancel = null;
+        }
+        mHintTask = null;
+    }
+
+    /// <summary>Подсказка готова: выбираем фигуру и показываем только советуемый ход.</summary>
+    private void PollHint()
+    {
+        if (mHintTask == null || !mHintTask.IsCompleted)
+            return;
+        Task<Move?> task = mHintTask;
+        mHintTask = null;
+        mHintCancel?.Dispose();
+        mHintCancel = null;
+        if (task.IsFaulted || task.IsCanceled || !task.Result.HasValue || State == null || State.IsOver)
+            return;
+
+        Move m = task.Result.Value;
+        Select(m.From);
+        if (m.Kind != MoveKind.Explode)
+            mBoard.ShowMoves(m.From, new List<Move> { m });
+        if (mHintText != null)
+            mHintText.text = "<color=#ffd76a>Подсказка:</color> " + DescribeMove(State, m);
+    }
+
+    private static string PieceName(PieceType t)
+    {
+        switch (t)
+        {
+            case PieceType.King: return "король";
+            case PieceType.Queen: return "ферзь";
+            case PieceType.Rook: return "ладья";
+            case PieceType.Bishop: return "слон";
+            case PieceType.Knight: return "конь";
+            case PieceType.Pawn: return "пешка";
+            case PieceType.Ghost: return "призрак";
+            default: return "фигура";
+        }
+    }
+
+    /// <summary>Ход словами: «конь g1 → f3», «ладья a1 пробивает a7»…</summary>
+    public static string DescribeMove(GameState s, Move m)
+    {
+        string who = PieceName(s.Cells[m.From].Type);
+        string from = Sq.Name(m.From), to = Sq.Name(m.To);
+        switch (m.Kind)
+        {
+            case MoveKind.Capture: return $"{who} {from} бьёт {to}";
+            case MoveKind.Pierce: return $"{who} {from} бьёт {to} сквозь фигуру";
+            case MoveKind.Castle: return $"рокировка: король {from} → {to}";
+            case MoveKind.DoubleJump: return $"двойной прыжок: конь {from} → {Sq.Name(m.Via)} → {to}";
+            case MoveKind.DoubleCapture: return $"двойной прыжок: конь {from} через {Sq.Name(m.Via)} бьёт {to}";
+            case MoveKind.Embark: return $"{who} {from} садится в коня на {to}";
+            case MoveKind.Disembark: return $"высадить пассажира коня {from} на {to}";
+            case MoveKind.Explode: return $"взорвать коня на {from} (кнопка справа)";
+            default: return $"{who} {from} → {to}";
+        }
     }
 
     #endregion
@@ -395,6 +498,7 @@ public class GameManager : MonoBehaviour
         if (State == null)
             return false;
 
+        CancelHint();
         Side mover = State.SideToMove;
         mEffects.Clear();
         GameState before = Net == null && Lesson == null ? State.Clone() : null;
@@ -920,6 +1024,7 @@ public class GameManager : MonoBehaviour
 
     private void CancelBot()
     {
+        CancelHint(); // позиция меняется — подсказка устарела
         if (mBotCancel != null)
         {
             mBotCancel.Cancel();
@@ -1266,6 +1371,11 @@ public class GameManager : MonoBehaviour
         mUndoButton = UiKit.CreatePlateButton(safe, "Ход назад", new Vector2(270, 64), Undo, 28);
         ((RectTransform)mUndoButton.transform).anchoredPosition = new Vector2(400 + 40 + 135, -100);
         mUndoButton.gameObject.SetActive(false);
+
+        // «Подсказка» — под «Ход назад».
+        mHintButton = UiKit.CreatePlateButton(safe, "Подсказка", new Vector2(270, 64), RequestHint, 28);
+        ((RectTransform)mHintButton.transform).anchoredPosition = new Vector2(400 + 40 + 135, -180);
+        mHintButton.gameObject.SetActive(false);
 
         // Часы справа от доски: сверху — соперник, снизу — тот, кто внизу доски.
         mTopClock = ClockPanel.Create(safe, new Vector2(400 + 40 + 115, 400 - 50));
