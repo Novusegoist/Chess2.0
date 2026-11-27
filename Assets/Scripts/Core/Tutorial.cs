@@ -53,6 +53,12 @@ namespace Chess2.Core
         public string Outro;
         public Func<GameState> Setup;
         public LessonStep[] Steps;
+
+        /// <summary>За кого играет игрок (в задачах дня бывает и за чёрных).</summary>
+        public Side PlayerSide = Side.White;
+
+        /// <summary>Это задача дня, а не урок обучения.</summary>
+        public bool IsDaily;
     }
 
     /// <summary>
@@ -67,11 +73,11 @@ namespace Chess2.Core
         /// После хода игрока: чёрные пропускают ход, снова ходят белые.
         /// Вызывать, только если партия не закончилась.
         /// </summary>
-        public static void PassTurn(GameState s)
+        public static void PassTurn(GameState s, Side player = Side.White)
         {
-            if (s.IsOver || s.SideToMove == Side.White)
+            if (s.IsOver || s.SideToMove == player)
                 return;
-            s.SideToMove = Side.White;
+            s.SideToMove = player;
             s.Ply++;
         }
 

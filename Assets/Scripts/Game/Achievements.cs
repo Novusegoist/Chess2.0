@@ -36,6 +36,8 @@ public static class Achievements
         new Def { Id = "chaos_win", Title = "Повелитель хаоса", Description = "Выиграй партию в режиме «Хаос»" },
         new Def { Id = "net_win", Title = "Сетевой боец", Description = "Выиграй партию по сети" },
         new Def { Id = "all_lessons", Title = "Ученик", Description = "Пройди все уроки обучения" },
+        new Def { Id = "daily_first", Title = "Решатель", Description = "Реши задачу дня" },
+        new Def { Id = "daily_week", Title = "Неделя задач", Description = "Решай задачи дня 7 дней подряд" },
     };
 
     private const string Prefix = "chess2.ach.";

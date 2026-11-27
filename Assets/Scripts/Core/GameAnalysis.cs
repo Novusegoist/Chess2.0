@@ -76,7 +76,7 @@ namespace Chess2.Core
         }
 
         /// <summary>Оценка позиции после хода — с точки зрения того, кто ходил.</summary>
-        private static int ScoreAfter(GameState before, Move played, BotSettings settings, CancellationToken cancel)
+        public static int ScoreAfter(GameState before, Move played, BotSettings settings, CancellationToken cancel = default)
         {
             Side mover = before.SideToMove;
             GameState after = before.Clone();

@@ -11,6 +11,9 @@ internal static class Program
 
     private static int Main(string[] args)
     {
+        if (args.Length > 0 && args[0] == "puzzles")
+            return MakePuzzles(args.Length > 1 ? int.Parse(args[1]) : 120,
+                args.Length > 2 ? args[2] : "../../Assets/Resources/Puzzles/daily.txt");
         if (args.Length > 0 && args[0] == "versus")
             return Versus(args.Length > 1 ? int.Parse(args[1]) : 20, args.Length > 2 ? int.Parse(args[2]) : 300);
         if (args.Length > 0 && args[0] == "arena")
@@ -68,6 +71,7 @@ internal static class Program
         Run("Сохранение партии: позиция, флаги, пассажиры и часы восстанавливаются точно", SaveRoundTrip);
         Run("Сохранение партии: повреждённый файл не загружается", SaveRejectsGarbage);
         Run("Разбор: взять висящего ферзя — лучший ход, пропустить — ошибка", ReviewFindsMissedQueen);
+        Run("Задачи дня: файл читается, решения — допустимые ходы, день выбирается по дате", DailyPuzzlesValid);
         foreach (Lesson lesson in Tutorial.Lessons)
             Run("Урок «" + lesson.Title + "» проходится", () => LessonSolvable(lesson));
 
@@ -1195,6 +1199,135 @@ internal static class Program
         return 0;
     }
 
+    /// <summary>
+    /// Генератор задач дня: dotnet run -- puzzles [сколько] [файл].
+    /// Боты играют партии («Корона» и «Хаос»); в каждой позиции ищем ход, который заметно лучше всех остальных
+    /// (выигрыш от 2,5 пешки, второй по силе ход хуже лучшего на 2,5 пешки). Всё детерминировано.
+    /// </summary>
+    private static int MakePuzzles(int count, string outPath)
+    {
+        var analysis = new BotSettings { MaxDepth = 3, TimeLimitMs = 600_000, QuiescenceDepth = 6 };
+        var player = new BotSettings { MaxDepth = 2, TimeLimitMs = 600_000, QuiescenceDepth = 4, EvalNoise = 60 };
+        // Партии разбираются параллельно на всех ядрах; результат не зависит от порядка —
+        // берём задачи по возрастанию номера партии, поэтому файл всегда одинаковый.
+        var found = new System.Collections.Concurrent.ConcurrentDictionary<int, Puzzle>();
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        int batch = Environment.ProcessorCount * 4;
+        for (int from = 0; from < 20_000; from += batch)
+        {
+            System.Threading.Tasks.Parallel.For(from, from + batch, g =>
+            {
+                Puzzle p = PuzzleFromGame(g, analysis, player);
+                if (p != null)
+                    found[g] = p;
+            });
+            Console.WriteLine($"партий {from + batch}, задач {found.Count}/{count} ({sw.Elapsed.TotalSeconds:0} с)");
+            if (found.Count >= count)
+                break;
+        }
+        var puzzles = new List<Puzzle>();
+        int[] themes = new int[3];
+        foreach (int g in found.Keys.OrderBy(k => k).Take(count))
+        {
+            puzzles.Add(found[g]);
+            themes[(int)found[g].Theme]++;
+        }
+
+        // Перемешиваем детерминированно, чтобы темы чередовались.
+        var order = new Random(12345);
+        for (int i = puzzles.Count - 1; i > 0; i--)
+        {
+            int j = order.Next(i + 1);
+            (puzzles[i], puzzles[j]) = (puzzles[j], puzzles[i]);
+        }
+
+        var sb = new System.Text.StringBuilder();
+        foreach (Puzzle p in puzzles)
+            sb.Append(DailyPuzzles.Serialize(p)).Append(DailyPuzzles.Separator).Append('\n');
+        System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(outPath)));
+        System.IO.File.WriteAllText(outPath, sb.ToString());
+        Console.WriteLine($"Готово: {puzzles.Count} задач (мат {themes[0]}, способности {themes[1]}, материал {themes[2]}) → {System.IO.Path.GetFullPath(outPath)}");
+        return 0;
+    }
+
+    private static Puzzle PuzzleFromGame(int g, BotSettings analysis, BotSettings player)
+    {
+        RuleSet rules = g % 3 == 2 ? RuleSet.Chaos : RuleSet.Default;
+        var s = GameState.CreateStandard(rules, seed: 50_000 + g);
+        var white = new Bot(player, seed: g * 2 + 1);
+        var black = new Bot(player, seed: g * 2 + 2);
+        var rnd = new Random(g);
+        for (int i = 0; i < 2; i++)
+        {
+            var opening = Rules.GetLegalMoves(s);
+            Rules.MakeMove(s, opening[rnd.Next(opening.Count)]);
+        }
+        while (!s.IsOver && s.Ply < 140)
+        {
+            if (s.Ply >= 12 && TryPuzzle(s, analysis, out Puzzle p))
+                return p; // одна задача с партии — чтобы задачи были разными
+            Move? m = (s.SideToMove == Side.White ? white : black).FindBestMove(s);
+            if (m == null)
+                break;
+            Rules.MakeMove(s, m.Value);
+        }
+        return null;
+    }
+
+    private static bool TryPuzzle(GameState s, BotSettings analysis, out Puzzle puzzle)
+    {
+        puzzle = null;
+        Side side = s.SideToMove;
+        var legal = Rules.GetLegalMoves(s);
+        if (legal.Count < 4)
+            return false;
+
+        // Быстрая проверка: есть ли вообще что-то сильно лучшее текущего материала.
+        int material = Material(s, side) - Material(s, side.Opponent());
+        if (material < -150)
+            return false; // вероятно, просто отыгрыш только что потерянного
+        var bot = new Bot(analysis, seed: 1);
+        bot.FindBestMove(s);
+        if (bot.LastScore < material + 250)
+            return false;
+
+        // Полная проверка: оценка каждого хода.
+        var scored = new List<(Move move, int score)>();
+        foreach (Move m in legal)
+            scored.Add((m, GameAnalysis.ScoreAfter(s, m, analysis)));
+        scored.Sort((x, y) => y.score.CompareTo(x.score));
+        int best = scored[0].score;
+        if (best < material + 250 || best - scored[1].score < 250 || best < 0)
+            return false;
+
+        puzzle = new Puzzle { State = s.Clone() };
+        foreach (var (move, score) in scored)
+            if (score >= best - 60)
+                puzzle.Solutions.Add(move);
+        if (puzzle.Solutions.Count > 2)
+            return false; // слишком много «правильных» ответов — неинтересно
+
+        // Тема: мат / способность / материал.
+        Move first = puzzle.Solutions[0];
+        var after = s.Clone();
+        var effects = new List<MoveEffect>();
+        Rules.TryMakeMove(after, first, effects);
+        bool mate = effects.Exists(e => e.Kind == EffectKind.KingFell)
+                    || (after.IsOver && (after.Result == GameResult.WhiteWins) == (side == Side.White));
+        bool ability = first.Kind == MoveKind.Pierce || first.IsDouble || first.Kind == MoveKind.Explode
+                       || first.Kind == MoveKind.Embark || first.Kind == MoveKind.Disembark
+                       || (s.Cells[first.From].Type == PieceType.Queen && Rules.HasAbility(s, s.Cells[first.From])
+                           && IsKnightJump(first));
+        puzzle.Theme = mate ? PuzzleTheme.Mate : ability ? PuzzleTheme.Ability : PuzzleTheme.Material;
+        return true;
+    }
+
+    private static bool IsKnightJump(Move m)
+    {
+        int dx = Math.Abs(Sq.X(m.From) - Sq.X(m.To)), dy = Math.Abs(Sq.Y(m.From) - Sq.Y(m.To));
+        return (dx == 1 && dy == 2) || (dx == 2 && dy == 1);
+    }
+
     private static int Material(GameState s, Side side)
     {
         int[] value = { 0, 40, 100, 310, 330, 500, 950, 1000 }; // None, Ghost, Pawn, Knight, Bishop, Rook, Queen, King
@@ -1241,6 +1374,33 @@ internal static class Program
         True(bad.Quality == MoveQuality.Mistake || bad.Quality == MoveQuality.Blunder,
             "пропустить ферзя — ошибка или зевок, а не " + bad.Quality + " (потеря " + bad.Loss + ")");
         True(bad.Best.HasValue && bad.Best.Value.To == Sq.Parse("a5"), "бот советует бить на a5");
+    }
+
+    private static void DailyPuzzlesValid()
+    {
+        Eq(0, DailyPuzzles.IndexFor(DailyPuzzles.Epoch, 365), "1 января 2026 — задача 0");
+        Eq(364, DailyPuzzles.IndexFor(DailyPuzzles.Epoch.AddDays(-1), 365), "день до начала — последняя задача");
+        Eq(1, DailyPuzzles.IndexFor(DailyPuzzles.Epoch.AddDays(366), 365), "через год — по кругу");
+
+        string path = System.IO.Path.Combine(AppContext.BaseDirectory, "../../../../../Assets/Resources/Puzzles/daily.txt");
+        if (!System.IO.File.Exists(path))
+        {
+            Fail("нет файла задач " + System.IO.Path.GetFullPath(path));
+            return;
+        }
+        var puzzles = DailyPuzzles.Parse(System.IO.File.ReadAllText(path));
+        True(puzzles.Count >= 30, "задач хотя бы на месяц: " + puzzles.Count);
+        foreach (Puzzle p in puzzles)
+        {
+            True(!p.State.IsOver, "позиция не закончена");
+            var legal = Rules.GetLegalMoves(p.State);
+            foreach (Move m in p.Solutions)
+                True(legal.Exists(x => x.SameAs(m)), "решение — допустимый ход: " + m);
+            // Сериализация туда-обратно не теряет решений.
+            var back = DailyPuzzles.Parse(DailyPuzzles.Serialize(p) + DailyPuzzles.Separator + "\n");
+            Eq(1, back.Count, "задача читается обратно");
+            Eq(p.Solutions.Count, back[0].Solutions.Count, "число решений");
+        }
     }
 
     private static void SaveRoundTrip()

@@ -627,6 +627,8 @@ public class GameManager : MonoBehaviour
             mHintText.text = L.T("<color=#ffd76a>Подсказка:</color> ") + DescribeMove(State, m);
     }
 
+    public static string PieceNameOf(PieceType t) => PieceName(t);
+
     private static string PieceName(PieceType t)
     {
         switch (t)
@@ -957,7 +959,7 @@ public class GameManager : MonoBehaviour
         Clock = new ChessClock(0);
         if (mChat != null)
             mChat.gameObject.SetActive(false);
-        mBoard.SetFlipped(false);
+        mBoard.SetFlipped(lesson.PlayerSide == Side.Black); // играешь за чёрных — они снизу
         if (mBannerText != null)
             mBannerText.gameObject.SetActive(false);
 
@@ -1025,16 +1027,22 @@ public class GameManager : MonoBehaviour
         switch (step.Check(State, move, mEffects))
         {
             case LessonVerdict.Progress:
-                Tutorial.PassTurn(State);
+                Tutorial.PassTurn(State, Lesson.PlayerSide);
                 UpdateStatus();
                 RefreshLessonPanel(null);
                 break;
 
             case LessonVerdict.StepDone:
-                Tutorial.PassTurn(State);
+                Tutorial.PassTurn(State, Lesson.PlayerSide);
                 LessonStepIndex++;
                 mStepStart = State.Clone();
-                if (LessonStepIndex >= Lesson.Steps.Length)
+                if (LessonStepIndex >= Lesson.Steps.Length && Lesson.IsDaily)
+                {
+                    DailyChallenge.MarkSolved();
+                    Lesson.Outro = DailyChallenge.OutroText();
+                    SoundManager.PlayDelayed("win", 0.4f);
+                }
+                else if (LessonStepIndex >= Lesson.Steps.Length)
                 {
                     AppSettings.MarkLessonDone(Lesson.Id);
                     bool all = true;

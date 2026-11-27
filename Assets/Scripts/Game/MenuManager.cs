@@ -35,6 +35,7 @@ public class MenuManager : MonoBehaviour
     private MenuButton mRestartButton;
     private MenuButton mResignButton;
     private MenuButton mContinueButton;
+    private MenuButton mDailyButton;
     private MenuButton mReviewButton;   // «Разбор партии» на экране конца партии
     private readonly List<Text> mStatsCells = new List<Text>();   // 6 строк × 3 числа
     private Text mStatsSummary;
@@ -202,6 +203,8 @@ public class MenuManager : MonoBehaviour
         {
             RefreshAudioIcons(); // звук могли переключить в опциях
             mContinueButton.gameObject.SetActive(SaveStore.Exists);
+            mDailyButton.gameObject.SetActive(DailyChallenge.Available);
+            mDailyButton.SetText(DailyChallenge.SolvedToday ? L.T("Задача решена") : L.T("Задача дня"));
         }
         if (screen == Screen.Lessons)
             RefreshLessons();
@@ -243,8 +246,19 @@ public class MenuManager : MonoBehaviour
 
     private void OpenLessons()
     {
+        bool daily = mGame.Lesson != null && mGame.Lesson.IsDaily;
         mGame.StopGame();
-        Show(Screen.Lessons);
+        Show(daily ? Screen.Main : Screen.Lessons);
+    }
+
+    /// <summary>«Задача дня»: сегодняшняя головоломка.</summary>
+    private void StartDaily()
+    {
+        Lesson daily = DailyChallenge.BuildTodayLesson();
+        if (daily == null)
+            return;
+        mGame.StartLesson(daily);
+        Show(Screen.None);
     }
 
     private void StartLesson(Lesson lesson)
@@ -623,6 +637,10 @@ public class MenuManager : MonoBehaviour
         var stats = UiKit.CreatePlateButton(root, L.T("Статистика"), new Vector2(240, 64), () => Show(Screen.Stats), 28);
         Place(stats.transform, new Vector2(0, 1), new Vector2(40 + 120, -64));
 
+        // «Задача дня» — под «Статистикой».
+        mDailyButton = UiKit.CreatePlateButton(root, L.T("Задача дня"), new Vector2(240, 64), StartDaily, 28);
+        Place(mDailyButton.transform, new Vector2(0, 1), new Vector2(40 + 120, -140));
+
         // Номер версии — в левом нижнем углу (пригодится, когда игроки пишут об ошибках).
         var version = UiKit.CreateText("Version", root, "v" + Application.version, 18,
             new Color(0.6f, 0.68f, 0.75f, 1f), TextAnchor.LowerLeft, shadow: false);
@@ -889,33 +907,33 @@ public class MenuManager : MonoBehaviour
 
         var grid = UiKit.CreateUi("Grid", root, typeof(GridLayoutGroup));
         var layout = grid.GetComponent<GridLayoutGroup>();
-        layout.cellSize = new Vector2(600, 64);
-        layout.spacing = new Vector2(20, 8);
+        layout.cellSize = new Vector2(600, 58);
+        layout.spacing = new Vector2(20, 6);
         layout.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
         layout.constraintCount = 2;
         layout.childAlignment = TextAnchor.UpperCenter;
-        grid.sizeDelta = new Vector2(1220, 9 * 72);
+        grid.sizeDelta = new Vector2(1220, 10 * 64);
         Place(grid, new Vector2(0.5f, 1), new Vector2(0, -165));
 
         foreach (Achievements.Def def in global::Achievements.All)
         {
             var card = UiKit.CreateUi("Card", grid, typeof(Image));
             card.GetComponent<Image>().color = new Color32(16, 36, 48, 200);
-            var title = UiKit.CreateText("Title", card, L.T(def.Title), 24, UiKit.TextLight, TextAnchor.UpperLeft, shadow: false);
+            var title = UiKit.CreateText("Title", card, L.T(def.Title), 22, UiKit.TextLight, TextAnchor.UpperLeft, shadow: false);
             title.fontStyle = FontStyle.Bold;
             var trt = (RectTransform)title.transform;
             trt.anchorMin = new Vector2(0, 1);
             trt.anchorMax = new Vector2(1, 1);
             trt.pivot = new Vector2(0.5f, 1);
-            trt.offsetMin = new Vector2(16, -34);
-            trt.offsetMax = new Vector2(-16, -6);
-            var desc = UiKit.CreateText("Desc", card, L.T(def.Description), 18, UiKit.TextLight, TextAnchor.LowerLeft, shadow: false);
+            trt.offsetMin = new Vector2(16, -30);
+            trt.offsetMax = new Vector2(-16, -4);
+            var desc = UiKit.CreateText("Desc", card, L.T(def.Description), 17, UiKit.TextLight, TextAnchor.LowerLeft, shadow: false);
             var drt = (RectTransform)desc.transform;
             drt.anchorMin = new Vector2(0, 0);
             drt.anchorMax = new Vector2(1, 0);
             drt.pivot = new Vector2(0.5f, 0);
-            drt.offsetMin = new Vector2(16, 6);
-            drt.offsetMax = new Vector2(-16, 30);
+            drt.offsetMin = new Vector2(16, 4);
+            drt.offsetMax = new Vector2(-16, 26);
             mAchItems.Add((def, title, desc));
         }
 
@@ -957,6 +975,7 @@ public class MenuManager : MonoBehaviour
         mStatsSummary.text =
             L.F("Сыграно партий: {0}   ·   Серия побед: {1} (лучшая — {2})", GameStats.TotalGames, GameStats.CurrentStreak, GameStats.BestStreak) + "\n"
             + L.F("Королей повержено: {0}   ·   Уроков пройдено: {1} из {2}", GameStats.KingsFelled, lessons, Tutorial.Lessons.Count) + "\n"
+            + L.F("Задач дня решено: {0}   ·   Серия: {1} (лучшая — {2})", DailyChallenge.TotalSolved, DailyChallenge.Streak, DailyChallenge.BestStreak) + "\n"
             + L.T("<size=19>* Вдвоём: победы белых / победы чёрных / ничьи. Серия — против бота и по сети.</size>");
         mStatsSummary.supportRichText = true;
 

@@ -37,6 +37,8 @@ public class Board : MonoBehaviour
     private Move? mLastMove;
     private Sprite mDotSprite;
     private Sprite mRingSprite;
+    private readonly Text[] mFileLabels = new Text[8]; // a..h вдоль нижнего края
+    private readonly Text[] mRankLabels = new Text[8]; // 1..8 вдоль левого края
 
     public void Create(GameManager gameManager)
     {
@@ -65,8 +67,58 @@ public class Board : MonoBehaviour
             mAllCells[sq] = cell;
         }
 
+        // Координаты по краю доски, как на настоящей: буквы внизу, цифры слева (поверх клеток).
+        for (int i = 0; i < 8; i++)
+        {
+            mFileLabels[i] = CreateLabel("File " + i, TextAnchor.LowerRight);
+            mRankLabels[i] = CreateLabel("Rank " + i, TextAnchor.UpperLeft);
+        }
+
         Layout();
         RefreshColors();
+    }
+
+    private Text CreateLabel(string name, TextAnchor align)
+    {
+        var t = UiKit.CreateText(name, transform, "", 20, Color.white, align, shadow: false);
+        t.fontStyle = FontStyle.Bold;
+        var rt = (RectTransform)t.transform;
+        rt.anchorMin = rt.anchorMax = Vector2.zero;
+        rt.pivot = new Vector2(0.5f, 0.5f);
+        rt.sizeDelta = new Vector2(CellSize - 8, CellSize - 6);
+        return t;
+    }
+
+    /// <summary>Подписи по краю: буквы и цифры с учётом разворота доски, цветом «наоборот» к клетке.</summary>
+    private void LayoutLabels()
+    {
+        if (mFileLabels[0] == null)
+            return;
+        for (int i = 0; i < 8; i++)
+        {
+            // i — столбец/строка на экране (0 — слева/снизу).
+            int file = Flipped ? 7 - i : i;
+            int rank = Flipped ? 7 - i : i;
+
+            Text f = mFileLabels[i];
+            f.text = ((char)('a' + file)).ToString();
+            ((RectTransform)f.transform).anchoredPosition = new Vector2(i * CellSize + CellSize / 2, CellSize / 2);
+            f.color = LabelColor(Sq.Of(file, Flipped ? 7 : 0));
+
+            Text r = mRankLabels[i];
+            r.text = (rank + 1).ToString();
+            ((RectTransform)r.transform).anchoredPosition = new Vector2(CellSize / 2, i * CellSize + CellSize / 2);
+            r.color = LabelColor(Sq.Of(Flipped ? 7 : 0, rank));
+        }
+    }
+
+    /// <summary>На светлой клетке — тёмная подпись, на тёмной — светлая.</summary>
+    private Color LabelColor(int sq)
+    {
+        bool light = (Sq.X(sq) + Sq.Y(sq)) % 2 != 0;
+        Color c = light ? mDarkColor : mLightColor;
+        c.a = 0.95f;
+        return c;
     }
 
     /// <summary>Развернуть доску (если человек играет чёрными).</summary>
@@ -159,6 +211,7 @@ public class Board : MonoBehaviour
 
     private void Layout()
     {
+        LayoutLabels();
         for (int sq = 0; sq < 64; sq++)
             if (mAllCells[sq] != null)
                 mAllCells[sq].mRectTransform.anchoredPosition = GetCellLocalPosition(sq);

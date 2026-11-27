@@ -346,3 +346,22 @@ Error while the opponent was connecting:
 Language
 System default
 The language will change when you return to the main menu.
+Find the move that makes the enemy king fall.
+Find a strong move with an ignited piece's power.
+Find the move that wins material.
+Mode: Chaos.
+Mode: Crown.
+Move the {0} from {1}
+Daily puzzle · {0}
+{0} to move. {1}
+Find the best move
+Correct: {0}!
+Streak: {0} days in a row (best — {1}). A new puzzle comes tomorrow.
+To menu
+Puzzle solved
+Daily puzzle
+Daily puzzles solved: {0}   ·   Streak: {1} (best — {2})
+Solver
+Solve a daily puzzle
+Puzzle week
+Solve daily puzzles 7 days in a row

@@ -15,6 +15,7 @@ public class LessonPanel : MonoBehaviour
     private Text mNote;
     private GameObject mButtons;
     private MenuButton mNextButton;
+    private MenuButton mBackButton;
 
     public static LessonPanel Create(Transform parent, Vector2 position, Action next, Action toLessons)
     {
@@ -58,7 +59,7 @@ public class LessonPanel : MonoBehaviour
         var buttons = UiKit.CreateColumn("Buttons", rt, 12);
         mButtons = buttons.gameObject;
         mNextButton = UiKit.CreatePlateButton(buttons, L.T("Следующий урок"), new Vector2(300, 64), next, 28);
-        UiKit.CreatePlateButton(buttons, L.T("К урокам"), new Vector2(300, 64), toLessons, 28);
+        mBackButton = UiKit.CreatePlateButton(buttons, L.T("К урокам"), new Vector2(300, 64), toLessons, 28);
         mButtons.SetActive(false);
     }
 
@@ -90,5 +91,6 @@ public class LessonPanel : MonoBehaviour
         mNote.gameObject.SetActive(!string.IsNullOrEmpty(note));
         mButtons.SetActive(finished);
         mNextButton.gameObject.SetActive(hasNext);
+        mBackButton.SetText(lesson.IsDaily ? L.T("В меню") : L.T("К урокам"));
     }
 }
