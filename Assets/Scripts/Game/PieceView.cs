@@ -142,6 +142,7 @@ public class PieceView : MonoBehaviour,
         if (mMoveRoutine != null)
             StopCoroutine(mMoveRoutine);
         mMoveRoutine = StartCoroutine(MoveRoutine(position, duration));
+        AppPerformance.Wake(); // ход (в том числе бота или соперника по сети) — плавно
     }
 
     /// <summary>Короткая «вспышка» — фигура ослабла или возродилась.</summary>

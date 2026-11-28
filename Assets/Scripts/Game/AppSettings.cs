@@ -127,6 +127,16 @@ public static class AppSettings
     private static readonly int[] DesktopFps = { 30, 60, 120, 144, 0 };
     private static readonly int[] MobileFps = { 30, 60, 120 }; // «без ограничения» на телефоне = 30 кадров
 
+    /// <summary>
+    /// Экономия батареи (только телефон): когда экрана не касаются и на доске ничего не движется,
+    /// игра рисует 15 кадров в секунду вместо полного числа. От касания — сразу полная плавность.
+    /// </summary>
+    public static bool BatterySaver
+    {
+        get => GetBool("batterySaver", true);
+        set => SetBool("batterySaver", value);
+    }
+
     /// <summary>Вертикальная синхронизация: кадры под частоту монитора, без разрывов картинки.</summary>
     public static bool VSync
     {

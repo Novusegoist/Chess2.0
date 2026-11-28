@@ -398,3 +398,4 @@ Code
 Game code copied — send it to a friend in any messenger.
 No game code in the clipboard. Copy the whole code starting with ASHC1:
 Friend's game
+Battery saver

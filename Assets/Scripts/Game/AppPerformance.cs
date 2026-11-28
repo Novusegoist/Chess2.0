@@ -10,11 +10,21 @@ using UnityEngine.UI;
 /// - яркость: полноэкранный слой поверх всего интерфейса;
 /// - громкость: общая громкость игры;
 /// - игра работает и в свёрнутом окне (медленно), чтобы сетевая партия не вставала;
-/// - камера только заливает фон: 3D-сцена, свет и постобработка выключены — экран закрыт интерфейсом.
+/// - камера только заливает фон: 3D-сцена, свет и постобработка выключены — экран закрыт интерфейсом;
+/// - телефон: экономия батареи — в простое (нет касаний и анимаций) 15 кадров в секунду (см. Wake).
 /// </summary>
 public class AppPerformance : MonoBehaviour
 {
     public const int BackgroundFps = 15;
+
+    /// <summary>Кадров в секунду в простое на телефоне (экономия батареи).</summary>
+    public const int IdleFps = 15;
+
+    /// <summary>Сколько держать полную плавность после касания или анимации.</summary>
+    private const float AwakeAfterInput = 2.5f;
+
+    private static float sAwakeUntil;
+    private static bool sIdle;
 
     private static AppPerformance sInstance;
     private Image mBrightness;
@@ -109,13 +119,57 @@ public class AppPerformance : MonoBehaviour
         return new Vector2Int(Mathf.Clamp(w, 640, maxW), Mathf.Clamp(h, 480, maxH));
     }
 
+    /// <summary>
+    /// Что-то движется (фигура, эффект, смена экрана) — на seconds секунд полная плавность.
+    /// На ПК ничего не делает.
+    /// </summary>
+    public static void Wake(float seconds = AwakeAfterInput)
+    {
+        if (!Platform.IsMobile)
+            return;
+        sAwakeUntil = Mathf.Max(sAwakeUntil, Time.unscaledTime + seconds);
+        if (sIdle)
+            ApplyFrameRate();
+    }
+
     void Update()
     {
         if (Platform.IsMobile)
+        {
+            UpdateIdle();
             return;
+        }
         if (F11Pressed())
             ToggleFullscreen();
         RememberWindowSize();
+    }
+
+    /// <summary>Телефон: простой → реже рисуем (и реже просыпаемся); касание → сразу полная плавность.</summary>
+    private void UpdateIdle()
+    {
+        if (PointerActive())
+            sAwakeUntil = Time.unscaledTime + AwakeAfterInput;
+        bool idle = AppSettings.BatterySaver && Time.unscaledTime > sAwakeUntil;
+        if (idle != sIdle)
+            ApplyFrameRate();
+    }
+
+    /// <summary>Палец на экране (или мышь в симуляторе), прокрутка, кнопка «Назад».</summary>
+    private static bool PointerActive()
+    {
+#if ENABLE_INPUT_SYSTEM
+        var touch = UnityEngine.InputSystem.Touchscreen.current;
+        if (touch != null && touch.primaryTouch.press.isPressed)
+            return true;
+        var mouse = UnityEngine.InputSystem.Mouse.current;
+        if (mouse != null && (mouse.leftButton.isPressed || mouse.scroll.ReadValue() != Vector2.zero
+                              || mouse.delta.ReadValue() != Vector2.zero))
+            return true;
+        var kb = UnityEngine.InputSystem.Keyboard.current;
+        return kb != null && kb.anyKey.isPressed;
+#else
+        return Input.touchCount > 0 || Input.GetMouseButton(0) || Input.mouseScrollDelta != Vector2.zero || Input.anyKey;
+#endif
     }
 
     /// <summary>Окно потянули мышкой — запоминаем новый размер.</summary>
@@ -153,6 +207,18 @@ public class AppPerformance : MonoBehaviour
         QualitySettings.vSyncCount = AppSettings.VSync && focused && Platform.IsDesktop ? 1 : 0;
         int limit = AppSettings.FpsLimit;
         Application.targetFrameRate = !focused ? BackgroundFps : limit > 0 ? limit : -1;
+
+        // Телефон в простое: 30 обновлений в секунду (касание замечается быстро), но кадр рисуется
+        // только каждое второе — 15 кадров. Рисование — главный расход батареи.
+        sIdle = Platform.IsMobile && focused && AppSettings.BatterySaver && Time.unscaledTime > sAwakeUntil;
+        if (sIdle)
+        {
+            int updates = Mathf.Min(limit > 0 ? limit : 30, IdleFps * 2);
+            Application.targetFrameRate = updates;
+            OnDemandRendering.renderFrameInterval = Mathf.Max(1, updates / IdleFps);
+        }
+        else
+            OnDemandRendering.renderFrameInterval = 1;
     }
 
     public static void ApplyBrightness()

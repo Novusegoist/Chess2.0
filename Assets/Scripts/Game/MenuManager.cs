@@ -210,6 +210,7 @@ public class MenuManager : MonoBehaviour
         }
         if (screen == Screen.Options)
             mOptions.Refresh();
+        AppPerformance.Wake(); // новый экран — без рывков
         if (screen == Screen.Main)
         {
             RefreshAudioIcons(); // звук могли переключить в опциях

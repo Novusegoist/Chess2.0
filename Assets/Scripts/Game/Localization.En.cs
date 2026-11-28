@@ -405,5 +405,6 @@ public static partial class L
         { "Код партии скопирован — отправь его другу в любом мессенджере.", "Game code copied — send it to a friend in any messenger." },
         { "В буфере обмена нет кода партии. Скопируй код целиком, начиная с ASHC1:", "No game code in the clipboard. Copy the whole code starting with ASHC1:" },
         { "Партия друга", "Friend's game" },
+        { "Экономия батареи", "Battery saver" },
     };
 }

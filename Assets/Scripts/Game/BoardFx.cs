@@ -45,6 +45,7 @@ public class BoardFx : MonoBehaviour
         if (!AppSettings.Effects || effects == null)
             return;
         mLayer.SetAsLastSibling(); // фигуры, созданные позже, не должны закрывать эффекты
+        AppPerformance.Wake(3f); // король падает дольше всех — 1.4 с
 
         foreach (Chess2.Core.MoveEffect e in effects)
         {

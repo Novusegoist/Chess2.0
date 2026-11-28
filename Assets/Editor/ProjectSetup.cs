@@ -61,8 +61,8 @@ public static class ProjectSetup
     }
 
     /// <summary>
-    /// Телефоны (Google Play и App Store): только альбомная ориентация, IL2CPP и ARM64 (так требует Google Play),
-    /// сборка в .aab, разрешение на интернет (игра по сети).
+    /// Телефоны (Google Play и App Store): только вертикальная ориентация, IL2CPP и ARM64 (так требует Google Play),
+    /// сборка в .aab, разрешение на интернет (игра по сети), урезание неиспользуемого кода (меньше сборка).
     /// </summary>
     private static void ApplyMobile()
     {
@@ -86,6 +86,14 @@ public static class ProjectSetup
             PlayerSettings.Android.forceInternetPermission = true;
         if (!EditorUserBuildSettings.buildAppBundle)
             EditorUserBuildSettings.buildAppBundle = true; // Google Play принимает только .aab
+
+        // Неиспользуемый код вырезается из сборки — она меньше и быстрее грузится.
+        // Medium безопасен: рефлексию игра не использует, Input System сам защищает свои типы (link.xml).
+        foreach (NamedBuildTarget target in new[] { NamedBuildTarget.Android, NamedBuildTarget.iOS })
+            if (PlayerSettings.GetManagedStrippingLevel(target) < ManagedStrippingLevel.Medium)
+                PlayerSettings.SetManagedStrippingLevel(target, ManagedStrippingLevel.Medium);
+        if (!PlayerSettings.stripEngineCode)
+            PlayerSettings.stripEngineCode = true;
 
         // На iPad приложение с одной ориентацией должно занимать весь экран.
         if (!PlayerSettings.iOS.requiresFullScreen)

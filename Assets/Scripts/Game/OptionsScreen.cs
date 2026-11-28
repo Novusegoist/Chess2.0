@@ -132,6 +132,12 @@ public class OptionsScreen
             AppPerformance.ApplyFrameRate();
             Refresh();
         });
+        if (Platform.IsMobile)
+            AddToggle(col, L.T("Экономия батареи"), () => AppSettings.BatterySaver, v =>
+            {
+                AppSettings.BatterySaver = v;
+                AppPerformance.ApplyFrameRate();
+            }, L.T("Вкл"), L.T("Выкл"));
         mRefreshers.Add(() => fps.text = AppSettings.VSync && Platform.IsDesktop
             ? L.T("как у монитора (VSync)")
             : AppSettings.FpsLimit > 0 ? AppSettings.FpsLimit.ToString() : L.T("без ограничения"));
