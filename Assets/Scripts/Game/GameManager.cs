@@ -751,6 +751,7 @@ public class GameManager : MonoBehaviour
         mBoard.SetLastMove(AppSettings.ShowLastMove ? State.LastMove : null);
         mPieceManager.Sync(State, mEffects);
         mFx?.Play(mEffects, mBoard.GetCellLocalPosition, side => mPieceManager.GetSprite(side, PieceType.King));
+        Haptics.ForMove(mEffects);
         UpdateStatus();
 
         foreach (MoveEffect e in mEffects)

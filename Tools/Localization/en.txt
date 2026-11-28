@@ -366,3 +366,4 @@ Solve a daily puzzle
 Puzzle week
 Solve daily puzzles 7 days in a row
 Effects
+Vibration

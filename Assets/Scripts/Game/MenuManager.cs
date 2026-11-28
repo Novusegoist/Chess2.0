@@ -151,6 +151,9 @@ public class MenuManager : MonoBehaviour
     void Update()
     {
         PollPendingNet();
+#if UNITY_EDITOR
+        ReloadIfOrientationChanged();
+#endif
 
         if (!EscapePressed())
             return;
@@ -328,6 +331,32 @@ public class MenuManager : MonoBehaviour
         mLanguagePending = changed;
         mOptions.ShowLanguagePending(changed);
     }
+
+#if UNITY_EDITOR
+    private bool? mBuiltPortrait;
+    private float mOrientationChangedAt = -1f;
+
+    /// <summary>
+    /// Только в редакторе: переключился между окном Game и симулятором телефона (или повернул симулятор) —
+    /// интерфейс собирается заново под новую форму экрана. Партия сохраняется, её можно продолжить.
+    /// Сетевую игру не трогаем. В сборке форма экрана не меняется: ПК — горизонтально, телефон — вертикально.
+    /// </summary>
+    private void ReloadIfOrientationChanged()
+    {
+        bool portrait = Platform.Portrait;
+        mBuiltPortrait ??= portrait;
+        if (portrait == mBuiltPortrait || mGame.Net != null || mPendingNet != null)
+        {
+            mOrientationChangedAt = -1f;
+            return;
+        }
+        // Пока окно меняет размер, форма может мелькать — ждём, пока устоится.
+        if (mOrientationChangedAt < 0)
+            mOrientationChangedAt = Time.unscaledTime;
+        else if (Time.unscaledTime - mOrientationChangedAt > 0.3f)
+            ReloadForLanguage(false);
+    }
+#endif
 
     /// <summary>Пересобрать весь интерфейс на новом языке (Steam, сохранения и настройки не трогаются).</summary>
     private void ReloadForLanguage(bool reopenOptions)

@@ -17,11 +17,15 @@ public static class Platform
 
     /// <summary>
     /// Вертикальная раскладка: только на телефоне (в сборке игра там всегда вертикальная).
-    /// На ПК — всегда горизонтальная. UnityEngine.Device отвечает «телефон» и в симуляторе телефона,
-    /// а в обычном окне Game — «ПК», поэтому в редакторе с платформой Android окно Game остаётся
-    /// горизонтальным. Повёрнут ли симулятор, не важно.
+    /// На ПК — всегда горизонтальная. В редакторе (платформа Android/iOS) — по форме окна: широкое окно
+    /// Game показывает ПК-раскладку, вертикальный симулятор — телефонную. UnityEngine.Device тут
+    /// не годится: пока открыт симулятор, он и в окне Game отвечает «телефон».
     /// </summary>
-    public static bool Portrait => IsMobile && UnityEngine.Device.Application.isMobilePlatform;
+#if UNITY_EDITOR
+    public static bool Portrait => IsMobile && Screen.height > Screen.width;
+#else
+    public static bool Portrait => IsMobile;
+#endif
 
     /// <summary>Кнопка «Выход»: на iOS приложения сами не закрываются (так требует App Store).</summary>
 #if UNITY_IOS

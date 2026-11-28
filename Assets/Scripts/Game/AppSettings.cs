@@ -188,6 +188,13 @@ public static class AppSettings
         set => SetBool("effects", value);
     }
 
+    /// <summary>Вибрация на телефоне при ударе, взрыве, мате и возрождении.</summary>
+    public static bool Vibration
+    {
+        get => GetBool("vibration", true);
+        set => SetBool("vibration", value);
+    }
+
     /// <summary>Подсказка под доской о том, что значат цвета меток.</summary>
     public static bool ShowHintText
     {

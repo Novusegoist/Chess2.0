@@ -289,6 +289,12 @@ public class OptionsScreen
         AddToggle(col, L.T("Подсказки ходов"), () => AppSettings.ShowMoveHints, v => AppSettings.ShowMoveHints = v, L.T("Вкл"), L.T("Выкл"));
         AddToggle(col, L.T("Последний ход"), () => AppSettings.ShowLastMove, v => AppSettings.ShowLastMove = v, L.T("Подсвечивать"), L.T("Не подсвечивать"));
         AddToggle(col, L.T("Эффекты"), () => AppSettings.Effects, v => AppSettings.Effects = v, L.T("Вкл"), L.T("Выкл"));
+        if (Platform.IsMobile)
+            AddToggle(col, L.T("Вибрация"), () => AppSettings.Vibration, v =>
+            {
+                AppSettings.Vibration = v;
+                Haptics.Play(Haptics.Kind.Medium); // сразу почувствовать, как это
+            }, L.T("Вкл"), L.T("Выкл"));
         AddToggle(col, L.T("Подсказки под доской"), () => AppSettings.ShowHintText, v => AppSettings.ShowHintText = v, L.T("Вкл"), L.T("Выкл"));
 
         Note(col, L.T("Способности загоревшихся фигур (для новых партий):"));
