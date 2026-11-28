@@ -227,8 +227,11 @@
 (`AppId` в нём не менять — по нему Windows узнаёт игру при обновлении).
 
 **Версия для macOS:** нужен модуль Unity «Mac Build Support (Mono)». Меню **Ash & Crown → Собрать для macOS** —
-универсальная сборка (Intel + Apple Silicon) и архив `Builds/Installer/AshAndCrown-<версия>-macOS.zip`
-с игрой и «Как открыть.txt». Архив пишет свой код, чтобы на Mac у игры осталось право на запуск.
+универсальная сборка (Intel + Apple Silicon) и в `Builds/Installer`:
+- `AshAndCrown-<версия>-macOS.dmg` — установщик: открываешь, перетаскиваешь игру на ярлык «Applications».
+  Собирает `Tools/Installer/make_dmg.py` (нужен Python и `python -m pip install pycdlib`): образ ISO 9660 + Rock Ridge,
+  который macOS открывает как обычный .dmg; без сжатия (~150 МБ) — сжатый .dmg Apple делается только на Mac;
+- `AshAndCrown-<версия>-macOS.zip` — запасной вариант (58 МБ). Архив пишет свой код, чтобы на Mac у игры осталось право на запуск.
 `.dmg`/`.pkg` и подпись разработчика Apple (без предупреждения при первом запуске) делаются только на Mac
 с аккаунтом Apple Developer. Без неё при первом запуске: правый клик по игре → «Открыть».
 
@@ -290,7 +293,7 @@ dotnet run --project Tools/CoreTests -c Release -- arena 10
 
 ## Последние изменения
 
-- Установщик для Windows (Inno Setup) и архив для macOS — меню «Ash & Crown» в Unity.
+- Установщик для Windows (Inno Setup), а для macOS — образ .dmg и архив zip; меню «Ash & Crown» в Unity.
 - Исправлен идентификатор приложения: на Android, iOS и macOS был от шаблона Unity, теперь `com.voidrunar.ashandcrown`.
 
 - Телефоны: экономия батареи — в простое (нет касаний и анимаций) 15 кадров в секунду, от касания сразу

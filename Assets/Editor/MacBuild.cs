@@ -10,8 +10,10 @@ using UnityEditor.Build.Reporting;
 using UnityEngine;
 
 /// <summary>
-/// Меню «Ash & Crown → Собрать для macOS»: сборка .app в Builds/macOS и архив для игроков
-/// Builds/Installer/AshAndCrown-&lt;версия&gt;-macOS.zip (внутри — игра и «Как открыть.txt»).
+/// Меню «Ash & Crown → Собрать для macOS»: сборка .app в Builds/macOS и для игроков в Builds/Installer:
+/// - AshAndCrown-&lt;версия&gt;-macOS.dmg — образ «перетащи игру в Программы» (Tools/Installer/make_dmg.py,
+///   нужен Python с pycdlib; без них — только zip);
+/// - AshAndCrown-&lt;версия&gt;-macOS.zip — запасной вариант (внутри — игра и «Как открыть.txt»).
 ///
 /// Почему zip, а не .dmg/.pkg: их делают и подписывают только на Mac (hdiutil, codesign, нотаризация Apple).
 /// Сборка универсальная (Intel + Apple Silicon): Unity и на Windows ставит ей простую подпись (ad-hoc),
@@ -100,7 +102,56 @@ public static class MacBuild
             EditorUtility.ClearProgressBar();
         }
         Debug.Log("Архив для macOS готов: " + zip);
-        EditorUtility.RevealInFinder(zip);
+
+        // Установщик-образ .dmg (игра + ярлык «Программы»): Tools/Installer/make_dmg.py, нужен Python с pycdlib.
+        string dmg = Path.Combine(outDir, $"AshAndCrown-{version}-macOS.dmg");
+        if (MakeDmg(root, app, dmg, appId))
+        {
+            Debug.Log("Образ .dmg для macOS готов: " + dmg);
+            EditorUtility.RevealInFinder(dmg);
+        }
+        else
+            EditorUtility.RevealInFinder(zip);
+    }
+
+    /// <summary>Собрать .dmg скриптом на Python. false — Python или pycdlib не найдены (zip всё равно есть).</summary>
+    private static bool MakeDmg(string root, string app, string dmg, string appId)
+    {
+        string howTo = Path.Combine(Path.GetTempPath(), "Как открыть.txt");
+        File.WriteAllText(howTo, HowToOpen, new UTF8Encoding(false));
+        string args = $"-E -X utf8 \"{Path.Combine(root, "Tools/Installer/make_dmg.py")}\" --app \"{app}\" --out \"{dmg}\" --add \"{howTo}\"";
+        if (File.Exists(appId))
+            args += $" --add \"{appId}\"";
+        var psi = new System.Diagnostics.ProcessStartInfo("python", args)
+        {
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true
+        };
+        try
+        {
+            EditorUtility.DisplayProgressBar("macOS", "Образ .dmg…", 0.8f);
+            using (var p = System.Diagnostics.Process.Start(psi))
+            {
+                string output = p.StandardOutput.ReadToEnd() + p.StandardError.ReadToEnd();
+                p.WaitForExit();
+                if (p.ExitCode == 0)
+                    return true;
+                Debug.LogWarning(".dmg не собран (нужен Python и «python -m pip install pycdlib»), есть только zip:\n" + output);
+                return false;
+            }
+        }
+        catch (Exception e)
+        {
+            Debug.LogWarning(".dmg не собран: не найден Python (" + e.Message + "). Есть только zip.");
+            return false;
+        }
+        finally
+        {
+            EditorUtility.ClearProgressBar();
+            File.Delete(howTo);
+        }
     }
 
     private const string HowToOpen =
