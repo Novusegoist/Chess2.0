@@ -46,7 +46,8 @@ public static class UiKit
         canvas.sortingOrder = sortingOrder;
         var scaler = go.GetComponent<CanvasScaler>();
         scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        scaler.referenceResolution = new Vector2(1600, 900);
+        // ПК: горизонтальный холст 1600×900. Телефон: вертикальный 1000×1600 (крупнее текст и кнопки).
+        scaler.referenceResolution = Platform.Portrait ? new Vector2(1000, 1600) : new Vector2(1600, 900);
         // Expand: область 1600×900 видна целиком при любом размере окна —
         // в узком окне ничего не уезжает за край (окно можно тянуть мышкой).
         scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.Expand;
@@ -66,6 +67,20 @@ public static class UiKit
 #else
         go.AddComponent<StandaloneInputModule>();
 #endif
+    }
+
+    /// <summary>Ширина широкого блока: на вертикальном экране не шире 940 (холст там 1000).</summary>
+    public static float Wide(float width) => Platform.Portrait ? Mathf.Min(width, 940f) : width;
+
+    /// <summary>Задать ширину текстового блока; на вертикальном экране длинные строки переносятся.</summary>
+    public static void FitText(Text text, float width, float height)
+    {
+        ((RectTransform)text.transform).sizeDelta = new Vector2(Wide(width), height);
+        if (Platform.Portrait)
+        {
+            text.horizontalOverflow = HorizontalWrapMode.Wrap;
+            text.verticalOverflow = VerticalWrapMode.Overflow;
+        }
     }
 
     public static RectTransform CreateUi(string name, Transform parent, params Type[] components)
@@ -192,7 +207,7 @@ public static class UiKit
     public static RectTransform CreateSettingRow(Transform parent, string label, float height = 58f)
     {
         var row = CreateUi("Row " + label, parent);
-        row.sizeDelta = new Vector2(1000, height);
+        row.sizeDelta = new Vector2(Wide(1000), height);
 
         var text = CreateText("Label", row, label, 30, TextLight, TextAnchor.MiddleRight);
         var trt = (RectTransform)text.transform;

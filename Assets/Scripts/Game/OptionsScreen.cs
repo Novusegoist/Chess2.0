@@ -283,7 +283,7 @@ public class OptionsScreen
             : L.T("Как в системе"));
         mLanguageNote = UiKit.CreateText("LanguageNote", col, L.T("Язык сменится, когда выйдешь в главное меню."),
             22, new Color32(255, 200, 120, 255));
-        ((RectTransform)mLanguageNote.transform).sizeDelta = new Vector2(1000, 32);
+        UiKit.FitText(mLanguageNote, 1000, 32);
         mLanguageNote.gameObject.SetActive(false);
 
         AddToggle(col, L.T("Подсказки ходов"), () => AppSettings.ShowMoveHints, v => AppSettings.ShowMoveHints = v, L.T("Вкл"), L.T("Выкл"));
@@ -314,7 +314,7 @@ public class OptionsScreen
     {
         var t = UiKit.CreateText("Note", col, text, 22, new Color(0.72f, 0.77f, 0.72f, 1f));
         int lines = text.Split('\n').Length;
-        ((RectTransform)t.transform).sizeDelta = new Vector2(1000, 14 + 28 * lines);
+        UiKit.FitText(t, 1000, 14 + 28 * lines);
     }
 
     private static string Percent(float v) => Mathf.RoundToInt(v * 100f) + "%";

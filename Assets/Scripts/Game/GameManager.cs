@@ -1239,6 +1239,12 @@ public class GameManager : MonoBehaviour
     private Vector2 EmotePosition(Side side)
     {
         Side bottom = mBoard.Flipped ? Side.Black : Side.White;
+        if (Platform.Portrait)
+        {
+            // Справа от часов того, кто отправил.
+            Transform clock = side == bottom ? mBottomClock.transform : mTopClock.transform;
+            return (Vector2)clock.localPosition + new Vector2(300, -50);
+        }
         return new Vector2(400 + 40 + 115, side == bottom ? -200 : 200);
     }
 
@@ -1713,8 +1719,70 @@ public class GameManager : MonoBehaviour
         var outline = mBannerText.gameObject.AddComponent<Outline>();
         outline.effectColor = new Color32(90, 0, 90, 255);
         outline.effectDistance = new Vector2(3, -3);
-        ((RectTransform)mBannerText.transform).sizeDelta = new Vector2(1200, 160);
+        ((RectTransform)mBannerText.transform).sizeDelta = new Vector2(UiKit.Wide(1200), 160);
+        mBannerText.horizontalOverflow = Platform.Portrait ? HorizontalWrapMode.Wrap : HorizontalWrapMode.Overflow;
         mBannerText.gameObject.SetActive(false);
+
+        if (Platform.Portrait)
+            ApplyPortraitLayout(boardRt, piecesRt, hrt, controls);
+    }
+
+    /// <summary>
+    /// Телефон, вертикальный экран (холст 1000 в ширину), сверху вниз:
+    /// строка хода · часы соперника · доска · твои часы · подсказка · кнопки в ряд · панель (урок, чат, разбор).
+    /// </summary>
+    private void ApplyPortraitLayout(RectTransform board, RectTransform pieces, RectTransform hint, RectTransform controls)
+    {
+        void Top(RectTransform rt, float x, float fromTop)
+        {
+            rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 1);
+            rt.pivot = new Vector2(0.5f, 1);
+            rt.anchoredPosition = new Vector2(x, -fromTop);
+        }
+
+        Top((RectTransform)mTopClock.transform, 0, 60);
+        Top(board, 0, 170);
+        Top(pieces, 0, 170);
+        Top((RectTransform)mBottomClock.transform, 0, 980);
+
+        hint.anchorMin = new Vector2(0, 1);
+        hint.anchorMax = new Vector2(1, 1);
+        hint.pivot = new Vector2(0.5f, 1);
+        hint.anchoredPosition = new Vector2(0, -1085);
+        hint.sizeDelta = new Vector2(-20, 40);
+        mHintText.horizontalOverflow = HorizontalWrapMode.Wrap;
+
+        // Кнопки рядом с партией — в один ряд под доской.
+        Top((RectTransform)mExplodeButton.transform, -310, 1130);
+        Top((RectTransform)mUndoButton.transform, 0, 1130);
+        Top((RectTransform)mHintButton.transform, 310, 1130);
+        foreach (RectTransform b in new[] { (RectTransform)mExplodeButton.transform, (RectTransform)mUndoButton.transform,
+                     (RectTransform)mHintButton.transform })
+            b.sizeDelta = new Vector2(290, 64);
+
+        // Кнопки разбора — в два ряда по три.
+        controls.anchorMin = controls.anchorMax = new Vector2(0.5f, 1);
+        controls.pivot = new Vector2(0.5f, 1);
+        controls.anchoredPosition = Vector2.zero;
+        for (int i = 0; i < controls.childCount; i++)
+        {
+            var b = (RectTransform)controls.GetChild(i);
+            b.sizeDelta = new Vector2(290, 64);
+            Top(b, (i % 3 - 1) * 310, 1130 + (i / 3) * 74);
+        }
+
+        // Панели урока, чата и разбора занимают всё, что осталось внизу.
+        void Fill(RectTransform rt, float fromTop)
+        {
+            rt.anchorMin = Vector2.zero;
+            rt.anchorMax = Vector2.one;
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.offsetMin = new Vector2(20, 10);
+            rt.offsetMax = new Vector2(-20, -fromTop);
+        }
+        Fill((RectTransform)mLessonPanel.transform, 1205);
+        Fill((RectTransform)mChat.transform, 1205);
+        Fill((RectTransform)mReviewPanel.transform, 1280);
     }
 
     #endregion

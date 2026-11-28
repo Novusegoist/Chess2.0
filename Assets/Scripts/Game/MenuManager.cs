@@ -614,32 +614,49 @@ public class MenuManager : MonoBehaviour
     {
         var root = ScreenRoot("Main", UiKit.Background);
 
-        Title(root, L.T("ПЕПЕЛ И КОРОНА"), 96, new Vector2(0, -110));
+        Text title = Title(root, L.T("ПЕПЕЛ И КОРОНА"), 96, new Vector2(0, -110));
         var sub = UiKit.CreateText("Subtitle", root, L.T("фигуры не умирают — они слабеют"), 30, new Color(0.8f, 0.85f, 0.8f, 1f));
         Place(sub.transform, new Vector2(0.5f, 1), new Vector2(0, -200));
-        ((RectTransform)sub.transform).sizeDelta = new Vector2(1000, 40); // строка занимает 200..240 от верха
+        UiKit.FitText(sub, 1000, 40); // строка занимает 200..240 от верха
 
         // Кнопки — сразу под подзаголовком (от верха экрана), чтобы при любом соотношении сторон
         // и с кнопкой «Продолжить» они не наезжали на текст. Шесть кнопок занимают до ~580 из 900.
         var col = UiKit.CreateColumn("Buttons", root, 14);
         Place(col, new Vector2(0.5f, 1), new Vector2(0, -258));
-        mContinueButton = UiKit.CreateImageButton(col, "continue", BigButtonHeight, ContinueSaved);
-        UiKit.CreateImageButton(col, "play_bot", BigButtonHeight, () => Show(Screen.BotSetup));
-        UiKit.CreateImageButton(col, "play_players", BigButtonHeight, () => Show(Screen.Players));
-        UiKit.CreatePlateButton(col, L.T("Обучение"), new Vector2(361, BigButtonHeight), () => Show(Screen.Lessons), 38);
-        UiKit.CreateImageButton(col, "options", BigButtonHeight, () => OpenOptions(Screen.Main));
+
+        // Телефон (вертикально): кнопки крупнее, а заголовок и кнопки — единым блоком посередине экрана.
+        float h = Platform.Portrait ? 110f : BigButtonHeight;
+        if (Platform.Portrait)
+        {
+            col.GetComponent<VerticalLayoutGroup>().spacing = 16;
+            Place(title.transform, new Vector2(0.5f, 0.5f), new Vector2(0, 450));
+            Place(sub.transform, new Vector2(0.5f, 0.5f), new Vector2(0, 360));
+            Place(col, new Vector2(0.5f, 0.5f), new Vector2(0, -60));
+        }
+        mContinueButton = UiKit.CreateImageButton(col, "continue", h, ContinueSaved);
+        UiKit.CreateImageButton(col, "play_bot", h, () => Show(Screen.BotSetup));
+        UiKit.CreateImageButton(col, "play_players", h, () => Show(Screen.Players));
+        UiKit.CreatePlateButton(col, L.T("Обучение"), new Vector2(361 * h / BigButtonHeight, h), () => Show(Screen.Lessons),
+            Mathf.RoundToInt(38 * h / BigButtonHeight));
+        UiKit.CreateImageButton(col, "options", h, () => OpenOptions(Screen.Main));
         if (Platform.CanQuit)
-            UiKit.CreateImageButton(col, "exit", BigButtonHeight, Quit);
+            UiKit.CreateImageButton(col, "exit", h, Quit);
 
         SoundToggles(root);
 
         // «Статистика» — в левом верхнем углу (справа вверху — звук и музыка).
         var stats = UiKit.CreatePlateButton(root, L.T("Статистика"), new Vector2(240, 64), () => Show(Screen.Stats), 28);
-        Place(stats.transform, new Vector2(0, 1), new Vector2(40 + 120, -64));
+        if (Platform.Portrait)
+            Place(stats.transform, new Vector2(0.5f, 0.5f), new Vector2(-135, -520));
+        else
+            Place(stats.transform, new Vector2(0, 1), new Vector2(40 + 120, -64));
 
         // «Задача дня» — под «Статистикой».
         mDailyButton = UiKit.CreatePlateButton(root, L.T("Задача дня"), new Vector2(240, 64), StartDaily, 28);
-        Place(mDailyButton.transform, new Vector2(0, 1), new Vector2(40 + 120, -140));
+        if (Platform.Portrait)
+            Place(mDailyButton.transform, new Vector2(0.5f, 0.5f), new Vector2(135, -520));
+        else
+            Place(mDailyButton.transform, new Vector2(0, 1), new Vector2(40 + 120, -140));
 
         // Номер версии — в левом нижнем углу (пригодится, когда игроки пишут об ошибках).
         var version = UiKit.CreateText("Version", root, "v" + Application.version, 18,
@@ -725,7 +742,7 @@ public class MenuManager : MonoBehaviour
                 ? L.T("Через Steam — приглашение другу, ничего настраивать не нужно.\nПо IP — в локальной сети, через Radmin VPN или по интернету.")
                 : L.T("По IP — в одной сети Wi-Fi, через VPN или по интернету.\nИграть можно и с ПК: версии совместимы."),
             24, new Color(0.75f, 0.8f, 0.75f, 1f));
-        ((RectTransform)info.transform).sizeDelta = new Vector2(1000, 80);
+        UiKit.FitText(info, 1000, 80);
 
         BottomBar(root, () => Show(Screen.Main), null, null);
         return root.gameObject;
@@ -779,10 +796,10 @@ public class MenuManager : MonoBehaviour
             L.T("Адрес покажет соперник на экране «Создать игру по сети».\nПорт по умолчанию ") + TcpTransport.DefaultPort
             + L.T(", другой можно указать через двоеточие: 26.12.34.56:7777"),
             22, new Color(0.75f, 0.8f, 0.75f, 1f));
-        ((RectTransform)hint.transform).sizeDelta = new Vector2(1000, 70);
+        UiKit.FitText(hint, 1000, 70);
 
         mJoinError = UiKit.CreateText("Error", col, "", 24, new Color32(255, 120, 110, 255));
-        ((RectTransform)mJoinError.transform).sizeDelta = new Vector2(1000, 34);
+        UiKit.FitText(mJoinError, 1000, 34);
 
         BottomBar(root, () => Show(Screen.Players), "continue", StartJoining);
         return root.gameObject;
@@ -798,10 +815,10 @@ public class MenuManager : MonoBehaviour
         Place(col, new Vector2(0.5f, 0.5f), new Vector2(0, 0));
 
         mWaitText = UiKit.CreateText("Info", col, "", 30, UiKit.TextLight);
-        ((RectTransform)mWaitText.transform).sizeDelta = new Vector2(1100, 330);
+        UiKit.FitText(mWaitText, 1100, 330);
 
         mWaitStatus = UiKit.CreateText("Status", col, "", 26, new Color32(255, 200, 120, 255));
-        ((RectTransform)mWaitStatus.transform).sizeDelta = new Vector2(1100, 40);
+        UiKit.FitText(mWaitStatus, 1100, 40);
 
         mWaitAction = UiKit.CreatePlateButton(col, L.T("Пригласить"), new Vector2(360, 72),
             () => SteamService.Instance?.OpenInviteDialog(), 34);
@@ -820,7 +837,7 @@ public class MenuManager : MonoBehaviour
         Place(col, new Vector2(0.5f, 0.5f), new Vector2(0, 20));
 
         var info = UiKit.CreateText("Info", col, L.T("Вдвоём за одним компьютером, ходите по очереди."), 28, UiKit.TextLight);
-        ((RectTransform)info.transform).sizeDelta = new Vector2(1000, 50);
+        UiKit.FitText(info, 1000, 50);
 
         Label(col, L.T("Время на партию"));
         TimeRow(col, mLocalTimeButtons);
@@ -878,7 +895,7 @@ public class MenuManager : MonoBehaviour
         }
 
         mStatsSummary = UiKit.CreateText("Summary", root, "", 24, light);
-        ((RectTransform)mStatsSummary.transform).sizeDelta = new Vector2(1100, 120);
+        UiKit.FitText(mStatsSummary, 1100, 120);
         Place(mStatsSummary.transform, new Vector2(0.5f, 1), new Vector2(0, -560));
 
         mStatsReset = UiKit.CreatePlateButton(root, L.T("Сбросить"), new Vector2(300, 64), ResetStats, 28);
@@ -890,7 +907,7 @@ public class MenuManager : MonoBehaviour
         var ach = UiKit.CreatePlateButton(root, L.T("Достижения"), new Vector2(320, 72), () => Show(Screen.Achievements), 30);
         var art = (RectTransform)ach.transform;
         art.anchorMin = art.anchorMax = art.pivot = new Vector2(0.5f, 0);
-        art.anchoredPosition = new Vector2(0, 56);
+        art.anchoredPosition = new Vector2(0, Platform.Portrait ? 150 : 56); // на узком экране — над «Сбросить»
 
         BottomBar(root, () => Show(Screen.Main), null, null);
         return root.gameObject;
@@ -907,12 +924,12 @@ public class MenuManager : MonoBehaviour
 
         var grid = UiKit.CreateUi("Grid", root, typeof(GridLayoutGroup));
         var layout = grid.GetComponent<GridLayoutGroup>();
-        layout.cellSize = new Vector2(600, 58);
+        layout.cellSize = new Vector2(Platform.Portrait ? 920 : 600, 58);
         layout.spacing = new Vector2(20, 6);
         layout.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
-        layout.constraintCount = 2;
+        layout.constraintCount = Platform.Portrait ? 1 : 2;
         layout.childAlignment = TextAnchor.UpperCenter;
-        grid.sizeDelta = new Vector2(1220, 10 * 64);
+        grid.sizeDelta = Platform.Portrait ? new Vector2(920, 19 * 64) : new Vector2(1220, 10 * 64);
         Place(grid, new Vector2(0.5f, 1), new Vector2(0, -165));
 
         foreach (Achievements.Def def in global::Achievements.All)
@@ -1160,7 +1177,7 @@ public class MenuManager : MonoBehaviour
         }));
 
         var hint = UiKit.CreateText("ModeHint", parent, "", 22, new Color(0.75f, 0.8f, 0.75f, 1f));
-        ((RectTransform)hint.transform).sizeDelta = new Vector2(1100, 60);
+        UiKit.FitText(hint, 1100, 60);
         return hint;
     }
 

@@ -66,17 +66,9 @@ public static class ProjectSetup
     /// </summary>
     private static void ApplyMobile()
     {
-        // Доска и панели по бокам рассчитаны на горизонтальный экран.
-        if (PlayerSettings.defaultInterfaceOrientation != UIOrientation.AutoRotation)
-            PlayerSettings.defaultInterfaceOrientation = UIOrientation.AutoRotation;
-        if (PlayerSettings.allowedAutorotateToPortrait)
-            PlayerSettings.allowedAutorotateToPortrait = false;
-        if (PlayerSettings.allowedAutorotateToPortraitUpsideDown)
-            PlayerSettings.allowedAutorotateToPortraitUpsideDown = false;
-        if (!PlayerSettings.allowedAutorotateToLandscapeLeft)
-            PlayerSettings.allowedAutorotateToLandscapeLeft = true;
-        if (!PlayerSettings.allowedAutorotateToLandscapeRight)
-            PlayerSettings.allowedAutorotateToLandscapeRight = true;
+        // На телефоне игра вертикальная: доска сверху, панели и кнопки под ней.
+        if (PlayerSettings.defaultInterfaceOrientation != UIOrientation.Portrait)
+            PlayerSettings.defaultInterfaceOrientation = UIOrientation.Portrait;
 
         foreach (NamedBuildTarget target in new[] { NamedBuildTarget.Android, NamedBuildTarget.iOS })
         {
