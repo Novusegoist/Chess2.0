@@ -372,5 +372,6 @@ public static partial class L
         { "Реши задачу дня", "Solve a daily puzzle" },
         { "Неделя задач", "Puzzle week" },
         { "Решай задачи дня 7 дней подряд", "Solve daily puzzles 7 days in a row" },
+        { "Эффекты", "Effects" },
     };
 }

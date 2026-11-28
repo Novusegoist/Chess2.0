@@ -17,6 +17,7 @@ public class GameManager : MonoBehaviour
 {
     public Board mBoard;
     public PieceManager mPieceManager;
+    private BoardFx mFx;
 
     [Tooltip("Минимальная пауза перед ходом бота, чтобы он не ходил мгновенно")]
     public float mBotMinThinkSeconds = 0.6f;
@@ -284,6 +285,7 @@ public class GameManager : MonoBehaviour
         Deselect();
         mBoard.SetLastMove(AppSettings.ShowLastMove ? State.LastMove : null);
         mPieceManager.Clear();
+        mFx?.Clear();
         mPieceManager.Sync(State, null);
         UpdateStatus();
         SoundManager.Play("start", 0.7f, 0f);
@@ -322,6 +324,7 @@ public class GameManager : MonoBehaviour
         Deselect();
         mBoard.SetLastMove(AppSettings.ShowLastMove ? State.LastMove : null);
         mPieceManager.Clear();
+        mFx?.Clear();
         mPieceManager.Sync(State, null);
         UpdateStatus();
         SoundManager.Play("disembark", 0.7f);
@@ -433,6 +436,7 @@ public class GameManager : MonoBehaviour
         if (State != null)
         {
             mPieceManager.Clear();
+            mFx?.Clear();
             mPieceManager.Sync(State, null);
             mBoard.SetLastMove(AppSettings.ShowLastMove ? State.LastMove : null);
         }
@@ -473,6 +477,7 @@ public class GameManager : MonoBehaviour
         GameState pos = mReviewPositions[mReviewIndex];
         Deselect();
         mPieceManager.Clear();
+        mFx?.Clear();
         mPieceManager.Sync(pos, null);
         mBoard.SetLastMove(pos.LastMove);
         RefreshReviewPanel();
@@ -745,6 +750,7 @@ public class GameManager : MonoBehaviour
         Deselect();
         mBoard.SetLastMove(AppSettings.ShowLastMove ? State.LastMove : null);
         mPieceManager.Sync(State, mEffects);
+        mFx?.Play(mEffects, mBoard.GetCellLocalPosition, side => mPieceManager.GetSprite(side, PieceType.King));
         UpdateStatus();
 
         foreach (MoveEffect e in mEffects)
@@ -988,6 +994,7 @@ public class GameManager : MonoBehaviour
         Deselect();
         mBoard.SetLastMove(null);
         mPieceManager.Clear();
+        mFx?.Clear();
         mPieceManager.Sync(State, null);
         UpdateStatus();
     }
@@ -1613,6 +1620,8 @@ public class GameManager : MonoBehaviour
 
         mBoard.Create(this);
         mPieceManager.Setup(mBoard, this);
+        var piecesRt = (RectTransform)mPieceManager.transform;
+        mFx = BoardFx.Create(piecesRt, (RectTransform)mBoard.transform, piecesRt);
         mRoot.SetActive(false);
     }
 

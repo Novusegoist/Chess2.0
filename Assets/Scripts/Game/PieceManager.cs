@@ -212,7 +212,7 @@ public class PieceManager : MonoBehaviour
         return view;
     }
 
-    private Sprite GetSprite(Side side, PieceType type)
+    public Sprite GetSprite(Side side, PieceType type)
     {
         string name = (side == Side.White ? "w_" : "b_") + type.ToString().ToLowerInvariant();
         if (mSprites.TryGetValue(name, out Sprite cached))

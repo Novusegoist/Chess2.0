@@ -181,6 +181,13 @@ public static class AppSettings
         set => SetBool("lastMove", value);
     }
 
+    /// <summary>Эффекты на доске: искры, взрыв с тряской, падающая корона, вспышка возрождения.</summary>
+    public static bool Effects
+    {
+        get => GetBool("effects", true);
+        set => SetBool("effects", value);
+    }
+
     /// <summary>Подсказка под доской о том, что значат цвета меток.</summary>
     public static bool ShowHintText
     {
