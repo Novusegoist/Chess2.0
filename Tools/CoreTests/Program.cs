@@ -1477,6 +1477,15 @@ internal static class Program
                 if (back == null)
                     return;
                 Eq(text, back.Serialize(), "запись после чтения та же");
+
+                // Код для друга: туда-обратно, в том числе разорванный мессенджером на строки и с текстом вокруг.
+                string code = rec.ToCode();
+                True(code.Length < 4000, "код влезает в сообщение (до 4096 символов): " + code.Length);
+                True(GameRecord.TryFromCode(code, out GameRecord fromCode), "код читается");
+                Eq(text, fromCode?.Serialize(), "код — та же партия");
+                string chopped = "Смотри партию: " + code.Substring(0, 40) + "\n" + code.Substring(40, 30) + " \r\n" + code.Substring(70) + " — ну как?";
+                True(GameRecord.TryFromCode(chopped, out _), "код с переносами и текстом вокруг");
+                True(!GameRecord.TryFromCode(code.Substring(0, code.Length / 2), out _), "обрезанный код не читается");
                 Eq(rec.Date, back.Date, "дата");
 
                 List<GameState> replay = back.Replay();
@@ -1490,6 +1499,8 @@ internal static class Program
             }
         }
         True(!GameRecord.TryParse("", out _), "пустая");
+        True(!GameRecord.TryFromCode("ASHC1:!!!", out _), "мусор вместо кода");
+        True(!GameRecord.TryFromCode("привет", out _), "нет кода");
         True(!GameRecord.TryParse("record 1 0 0 0 0 0 0", out _), "без позиции");
     }
 

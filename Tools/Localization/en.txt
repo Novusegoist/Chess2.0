@@ -393,3 +393,8 @@ Loading…
 Nobody yet. Play a game and be the first!
 Steam did not respond, try again later
 Leaderboard is unavailable
+Paste a friend's game
+Code
+Game code copied — send it to a friend in any messenger.
+No game code in the clipboard. Copy the whole code starting with ASHC1:
+Friend's game

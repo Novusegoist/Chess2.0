@@ -400,5 +400,10 @@ public static partial class L
         { "Пока никого. Сыграй партию — и ты будешь первым!", "Nobody yet. Play a game and be the first!" },
         { "Steam не ответил, попробуй позже", "Steam did not respond, try again later" },
         { "Таблица лидеров недоступна", "Leaderboard is unavailable" },
+        { "Вставить партию друга", "Paste a friend's game" },
+        { "Код", "Code" },
+        { "Код партии скопирован — отправь его другу в любом мессенджере.", "Game code copied — send it to a friend in any messenger." },
+        { "В буфере обмена нет кода партии. Скопируй код целиком, начиная с ASHC1:", "No game code in the clipboard. Copy the whole code starting with ASHC1:" },
+        { "Партия друга", "Friend's game" },
     };
 }

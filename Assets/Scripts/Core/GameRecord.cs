@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
+using System.IO.Compression;
 using System.Text;
 
 namespace Chess2.Core
@@ -31,6 +33,10 @@ namespace Chess2.Core
 
         public GameResult Result;
         public EndReason EndReason;
+
+        /// <summary>Партию прислал друг (вставлена кодом): итог показывается как «белые/чёрные победили».</summary>
+        public bool Imported;
+
         public GameState Start;
         public readonly List<Move> Moves = new List<Move>();
 
@@ -56,7 +62,7 @@ namespace Chess2.Core
         }
 
         /// <summary>Победил ли человек: true/false, null — ничья (или партия вдвоём).</summary>
-        public bool? PlayerWon => Result == GameResult.Draw || Opponent == RecordOpponent.Local ? (bool?)null
+        public bool? PlayerWon => Result == GameResult.Draw || Opponent == RecordOpponent.Local || Imported ? (bool?)null
             : (Result == GameResult.WhiteWins) == (PlayerSide == Side.White);
 
         public string Serialize()
@@ -64,7 +70,7 @@ namespace Chess2.Core
             var sb = new StringBuilder();
             sb.Append("record ").Append(Version).Append(' ').Append(Date.Ticks.ToString(Inv)).Append(' ')
               .Append((int)Opponent).Append(' ').Append((int)Difficulty).Append(' ').Append((int)PlayerSide).Append(' ')
-              .Append((int)Result).Append(' ').Append((int)EndReason).Append('\n');
+              .Append((int)Result).Append(' ').Append((int)EndReason).Append(' ').Append(Imported ? 1 : 0).Append('\n');
             foreach (Move m in Moves)
                 sb.Append("move ").Append(m.From).Append(' ').Append(m.To).Append(' ').Append((int)m.Kind).Append(' ')
                   .Append(m.Via).Append('\n');
@@ -95,6 +101,7 @@ namespace Chess2.Core
                         r.PlayerSide = (Side)I(5);
                         r.Result = (GameResult)I(6);
                         r.EndReason = (EndReason)I(7);
+                        r.Imported = f.Length > 8 && I(8) != 0; // поле появилось позже — в старых записях его нет
                         hasHeader = true;
                     }
                     else if (f[0] == "move")
@@ -107,6 +114,73 @@ namespace Chess2.Core
             }
             catch (Exception)
             {
+                return false;
+            }
+        }
+
+        /// <summary>Приставка кода партии: по ней видно, что это партия «Пепла и короны» и какой версии.</summary>
+        public const string CodePrefix = "ASHC1:";
+
+        /// <summary>
+        /// Код партии, чтобы отправить другу: запись, сжатая и записанная буквами (base64url).
+        /// Обычная партия — несколько сотен символов, очень длинная (400 полуходов) — около 2000;
+        /// помещается в одно сообщение мессенджера (в Telegram до 4096).
+        /// </summary>
+        public string ToCode()
+        {
+            byte[] raw = Encoding.UTF8.GetBytes(Serialize());
+            using (var output = new MemoryStream())
+            {
+                using (var deflate = new DeflateStream(output, CompressionLevel.Optimal, leaveOpen: true))
+                    deflate.Write(raw, 0, raw.Length);
+                string b64 = Convert.ToBase64String(output.ToArray());
+                return CodePrefix + b64.TrimEnd('=').Replace('+', '-').Replace('/', '_');
+            }
+        }
+
+        /// <summary>
+        /// Прочитать код партии. Пробелы и переносы внутри (мессенджер мог разбить строку) не мешают,
+        /// текст вокруг кода — тоже. false — кода нет или он испорчен.
+        /// </summary>
+        public static bool TryFromCode(string text, out GameRecord record)
+        {
+            record = null;
+            if (string.IsNullOrEmpty(text))
+                return false;
+            int start = text.IndexOf(CodePrefix, StringComparison.Ordinal);
+            if (start < 0)
+                return false;
+            var sb = new StringBuilder();
+            for (int i = start + CodePrefix.Length; i < text.Length; i++)
+            {
+                char c = text[i];
+                if (char.IsWhiteSpace(c))
+                    continue;
+                bool ok = (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' || c == '_';
+                if (!ok)
+                    break; // код кончился
+                sb.Append(c);
+            }
+            try
+            {
+                string b64 = sb.ToString().Replace('-', '+').Replace('_', '/');
+                b64 = b64.PadRight(b64.Length + (4 - b64.Length % 4) % 4, '=');
+                byte[] packed = Convert.FromBase64String(b64);
+                using (var input = new MemoryStream(packed))
+                using (var deflate = new DeflateStream(input, CompressionMode.Decompress))
+                using (var reader = new StreamReader(deflate, Encoding.UTF8))
+                {
+                    // Защита от «бомбы»: настоящая запись — несколько килобайт.
+                    char[] buf = new char[256 * 1024];
+                    int n = reader.ReadBlock(buf, 0, buf.Length);
+                    if (n >= buf.Length)
+                        return false;
+                    return TryParse(new string(buf, 0, n), out record) && record.Replay().Count > 1;
+                }
+            }
+            catch (Exception)
+            {
+                record = null;
                 return false;
             }
         }

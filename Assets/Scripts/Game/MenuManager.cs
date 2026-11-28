@@ -1119,6 +1119,7 @@ public class MenuManager : MonoBehaviour
 
     private RectTransform mHistoryList;
     private Text mHistoryEmpty;
+    private Text mHistoryStatus;
 
     /// <summary>«Прошлые партии»: список последних партий (новые сверху); нажатие открывает разбор.</summary>
     private GameObject BuildHistory()
@@ -1130,7 +1131,7 @@ public class MenuManager : MonoBehaviour
         var view = UiKit.CreateUi("View", root, typeof(Image), typeof(RectMask2D), typeof(ScrollRect));
         view.anchorMin = Vector2.zero;
         view.anchorMax = Vector2.one;
-        view.offsetMin = new Vector2(0, 150);
+        view.offsetMin = new Vector2(0, 190);
         view.offsetMax = new Vector2(0, -150);
         view.GetComponent<Image>().color = Color.clear;
 
@@ -1151,6 +1152,18 @@ public class MenuManager : MonoBehaviour
         UiKit.FitText(mHistoryEmpty, 1000, 80);
         Place(mHistoryEmpty.transform, new Vector2(0.5f, 0.5f), Vector2.zero);
 
+        // Партия друга: он нажал «Код» у своей партии и прислал текст — копируешь и жмёшь сюда.
+        var paste = UiKit.CreatePlateButton(root, L.T("Вставить партию друга"), new Vector2(380, 64), ImportFromClipboard, 26);
+        var prt = (RectTransform)paste.transform;
+        prt.anchorMin = prt.anchorMax = prt.pivot = new Vector2(0.5f, 0);
+        prt.anchoredPosition = new Vector2(0, Platform.Portrait ? 130 : 50);
+
+        mHistoryStatus = UiKit.CreateText("Status", root, "", 22, new Color32(255, 200, 120, 255));
+        UiKit.FitText(mHistoryStatus, 1000, 34);
+        var srt = (RectTransform)mHistoryStatus.transform;
+        srt.anchorMin = srt.anchorMax = srt.pivot = new Vector2(0.5f, 0);
+        srt.anchoredPosition = new Vector2(0, Platform.Portrait ? 200 : 122);
+
         BottomBar(root, () => Show(Screen.Stats), null, null);
         return root.gameObject;
     }
@@ -1160,6 +1173,7 @@ public class MenuManager : MonoBehaviour
         for (int i = mHistoryList.childCount - 1; i >= 0; i--)
             Destroy(mHistoryList.GetChild(i).gameObject);
 
+        mHistoryStatus.text = "";
         List<GameRecord> records = GameHistory.Load();
         mHistoryEmpty.gameObject.SetActive(records.Count == 0);
         float width = UiKit.Wide(1100);
@@ -1171,14 +1185,14 @@ public class MenuManager : MonoBehaviour
             GameRecord captured = rec;
             card.GetComponent<Button>().onClick.AddListener(() => OpenRecord(captured));
 
-            string info = rec.Date.ToString("dd.MM.yyyy HH:mm") + "   " + OpponentName(rec) + "   "
+            string info = rec.Date.ToString("dd.MM.yyyy HH:mm") + "   " + (rec.Imported ? L.T("Партия друга") : OpponentName(rec)) + "   "
                 + L.F("ходов: {0}", (rec.Moves.Count + 1) / 2);
             var left = UiKit.CreateText("Info", card, info, 24, UiKit.TextLight, TextAnchor.MiddleLeft, shadow: false);
             var lrt = (RectTransform)left.transform;
             lrt.anchorMin = Vector2.zero;
             lrt.anchorMax = Vector2.one;
             lrt.offsetMin = new Vector2(20, 0);
-            lrt.offsetMax = new Vector2(-230, 0);
+            lrt.offsetMax = new Vector2(-390, 0);
             left.horizontalOverflow = HorizontalWrapMode.Wrap;
 
             (string result, Color color) = ResultText(rec);
@@ -1188,9 +1202,35 @@ public class MenuManager : MonoBehaviour
             rrt.anchorMin = new Vector2(1, 0);
             rrt.anchorMax = Vector2.one;
             rrt.pivot = new Vector2(1, 0.5f);
-            rrt.offsetMin = new Vector2(-230, 0);
-            rrt.offsetMax = new Vector2(-20, 0);
+            rrt.offsetMin = new Vector2(-390, 0);
+            rrt.offsetMax = new Vector2(-180, 0);
+
+            // «Код» — скопировать партию, чтобы отправить другу.
+            var copy = UiKit.CreatePlateButton(card, L.T("Код"), new Vector2(140, 48), () => CopyRecordCode(captured), 24);
+            var crt = (RectTransform)copy.transform;
+            crt.anchorMin = crt.anchorMax = crt.pivot = new Vector2(1, 0.5f);
+            crt.anchoredPosition = new Vector2(-16, 0);
         }
+    }
+
+    private void CopyRecordCode(GameRecord record)
+    {
+        GUIUtility.systemCopyBuffer = record.ToCode();
+        mHistoryStatus.text = L.T("Код партии скопирован — отправь его другу в любом мессенджере.");
+    }
+
+    /// <summary>Код партии из буфера обмена — в список и сразу в разбор.</summary>
+    private void ImportFromClipboard()
+    {
+        if (!GameRecord.TryFromCode(GUIUtility.systemCopyBuffer, out GameRecord record))
+        {
+            mHistoryStatus.text = L.T("В буфере обмена нет кода партии. Скопируй код целиком, начиная с ASHC1:");
+            return;
+        }
+        record.Imported = true;
+        record.Date = DateTime.Now; // когда добавили — так она окажется наверху списка
+        GameHistory.Add(record);
+        OpenRecord(record);
     }
 
     private void OpenRecord(GameRecord record)
@@ -1221,7 +1261,7 @@ public class MenuManager : MonoBehaviour
         var grey = new Color(0.75f, 0.78f, 0.8f, 1f);
         if (rec.Result == GameResult.Draw)
             return (L.T("Ничья"), grey);
-        if (rec.Opponent == RecordOpponent.Local)
+        if (rec.Opponent == RecordOpponent.Local || rec.Imported)
             return (rec.Result == GameResult.WhiteWins ? L.T("Белые победили") : L.T("Чёрные победили"), gold);
         return rec.PlayerWon == true
             ? (L.T("Победа"), (Color)new Color32(140, 230, 140, 255))
