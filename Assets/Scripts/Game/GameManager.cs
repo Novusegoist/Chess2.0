@@ -246,6 +246,7 @@ public class GameManager : MonoBehaviour
         Deselect();
         EndLesson();
         State = null;
+        ViewingRecord = false;
         SetVisible(false);
     }
 
@@ -257,6 +258,7 @@ public class GameManager : MonoBehaviour
 
     private void NewGame(SavedGame saved = null)
     {
+        ViewingRecord = false;
         StopReview();
         CancelBot();
         EndLesson();
@@ -673,7 +675,7 @@ public class GameManager : MonoBehaviour
     #region Сохранение
 
     /// <summary>Сохраняются только партии против бота и вдвоём — не сетевые и не уроки.</summary>
-    private bool CanSave => State != null && Net == null && Lesson == null;
+    private bool CanSave => State != null && Net == null && Lesson == null && !ViewingRecord;
 
     /// <summary>Записать партию на диск (законченную — стереть).</summary>
     public void SaveNow()
@@ -858,10 +860,71 @@ public class GameManager : MonoBehaviour
             SoundManager.Play(weWon ? "win" : "lose", 1f, 0f);
         }
         RecordStats();
+        ArchiveGame();
         GameEnded?.Invoke(State);
     }
 
     #endregion
+
+    /// <summary>Законченную партию — в «Прошлые партии» (уроки и задачи дня — нет).</summary>
+    private void ArchiveGame()
+    {
+        if (Lesson != null || mHistory.Count == 0)
+            return;
+        GameRecord record = GameRecord.FromPositions(mHistory, State);
+        if (record == null)
+            return;
+        record.Date = DateTime.Now;
+        record.Opponent = Net != null ? RecordOpponent.Net : PlayVsBot ? RecordOpponent.Bot : RecordOpponent.Local;
+        record.Difficulty = BotDifficulty;
+        record.PlayerSide = Net != null ? LocalSide : PlayVsBot ? BotSide.Opponent() : Side.White;
+        GameHistory.Add(record);
+    }
+
+    /// <summary>Открыта прошлая партия из списка (только разбор, сохранение не трогается).</summary>
+    public bool ViewingRecord { get; private set; }
+
+    /// <summary>Открыть прошлую партию сразу в разборе. false — партию не удалось восстановить.</summary>
+    public bool OpenRecord(GameRecord record)
+    {
+        List<GameState> positions = record.Replay();
+        if (positions.Count < 2)
+            return false;
+
+        EnsureBuilt();
+        if (Net != null)
+        {
+            Net.Close();
+            Net = null;
+        }
+        CancelBot();
+        StopReview();
+        EndLesson();
+        Deselect();
+        ViewingRecord = true;
+        PlayVsBot = false;
+        TimeMinutes = 0;
+        Rules = positions[0].Rules;
+        Paused = false;
+
+        mHistory.Clear();
+        for (int i = 0; i < positions.Count - 1; i++)
+            mHistory.Add(positions[i]);
+        State = positions[positions.Count - 1];
+        Clock = new ChessClock(0);
+        if (mChat != null)
+            mChat.gameObject.SetActive(false);
+
+        mBoard.SetFlipped(record.PlayerSide == Side.Black);
+        mBoard.SetLastMove(AppSettings.ShowLastMove ? State.LastMove : null);
+        mPieceManager.Clear();
+        mFx?.Clear();
+        mPieceManager.Sync(State, null);
+        UpdateStatus();
+        SetVisible(true);
+        StartReview();
+        return Reviewing;
+    }
 
     /// <summary>Итог партии — в статистику (уроки не считаются).</summary>
     private void RecordStats()
@@ -941,6 +1004,7 @@ public class GameManager : MonoBehaviour
     public void StartLesson(Lesson lesson)
     {
         EnsureBuilt();
+        ViewingRecord = false;
         if (Net != null)
         {
             Net.Close();

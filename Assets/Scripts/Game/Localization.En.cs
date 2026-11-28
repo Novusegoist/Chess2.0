@@ -381,5 +381,12 @@ public static partial class L
         { "Лёд", "Ice" },
         { "Луг", "Meadow" },
         { "Аметист", "Amethyst" },
+        { "Прошлые партии", "Past games" },
+        { "Здесь появятся законченные партии: с ботом, вдвоём и по сети.", "Finished games will appear here: vs bot, two players and online." },
+        { "ходов: {0}", "moves: {0}" },
+        { "Вдвоём", "Two players" },
+        { "Ничья", "Draw" },
+        { "Победа", "Win" },
+        { "Поражение", "Loss" },
     };
 }

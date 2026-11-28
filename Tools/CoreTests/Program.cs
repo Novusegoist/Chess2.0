@@ -70,6 +70,7 @@ internal static class Program
         Run("Бот: скорость перебора", BotSpeed);
         Run("Сохранение партии: позиция, флаги, пассажиры и часы восстанавливаются точно", SaveRoundTrip);
         Run("Сохранение партии: повреждённый файл не загружается", SaveRejectsGarbage);
+        Run("Прошлые партии: запись читается и повторяется ход в ход", RecordReplays);
         Run("Разбор: взять висящего ферзя — лучший ход, пропустить — ошибка", ReviewFindsMissedQueen);
         Run("Задачи дня: файл читается, решения — допустимые ходы, день выбирается по дате", DailyPuzzlesValid);
         foreach (Lesson lesson in Tutorial.Lessons)
@@ -1438,6 +1439,57 @@ internal static class Program
                 }
             }
         }
+    }
+
+    private static void RecordReplays()
+    {
+        foreach (RuleSet rules in new[] { RuleSet.Default, RuleSet.Chaos })
+        {
+            for (int game = 0; game < 8; game++)
+            {
+                var rnd = new Random(300 + game);
+                GameState s = GameState.CreateStandard(rules, seed: 40 + game);
+                // Половина партий — «продолженные»: запись начинается с середины.
+                int skip = game % 2 == 0 ? 0 : 10;
+                var positions = new List<GameState>();
+                for (int ply = 0; ply < 400 && !s.IsOver; ply++)
+                {
+                    if (ply >= skip)
+                        positions.Add(s.Clone());
+                    var moves = Rules.GetLegalMoves(s);
+                    if (moves.Count == 0)
+                        break;
+                    True(Rules.TryMakeMove(s, moves[rnd.Next(moves.Count)]), "ход");
+                }
+                if (!s.IsOver)
+                    Rules.EndGame(s, Side.White, EndReason.Resignation); // сдача — не ход
+
+                GameRecord rec = GameRecord.FromPositions(positions, s);
+                True(rec != null, "запись собрана");
+                if (rec == null)
+                    return;
+                rec.Date = new DateTime(2026, 11, 28, 15, 30, 0);
+                rec.Opponent = RecordOpponent.Bot;
+                rec.PlayerSide = Side.Black;
+                string text = rec.Serialize();
+                True(GameRecord.TryParse(text, out GameRecord back), "прочиталась");
+                if (back == null)
+                    return;
+                Eq(text, back.Serialize(), "запись после чтения та же");
+                Eq(rec.Date, back.Date, "дата");
+
+                List<GameState> replay = back.Replay();
+                Eq(positions.Count + 1, replay.Count, "число позиций");
+                for (int i = 0; i < positions.Count && i < replay.Count; i++)
+                    Eq(positions[i].ToAscii(), replay[i].ToAscii(), "позиция " + i);
+                GameState last = replay[replay.Count - 1];
+                Eq(s.ToAscii(), last.ToAscii(), "последняя позиция");
+                Eq(s.Result, last.Result, "итог");
+                Eq(s.EndReason, last.EndReason, "причина");
+            }
+        }
+        True(!GameRecord.TryParse("", out _), "пустая");
+        True(!GameRecord.TryParse("record 1 0 0 0 0 0 0", out _), "без позиции");
     }
 
     private static void SaveRejectsGarbage()

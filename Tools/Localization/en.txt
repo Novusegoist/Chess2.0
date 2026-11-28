@@ -374,3 +374,10 @@ Night
 Ice
 Meadow
 Amethyst
+Past games
+Finished games will appear here: vs bot, two players and online.
+moves: {0}
+Two players
+Draw
+Win
+Loss

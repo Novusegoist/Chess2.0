@@ -19,7 +19,7 @@ using UnityEngine.InputSystem;
 [RequireComponent(typeof(GameManager))]
 public class MenuManager : MonoBehaviour
 {
-    private enum Screen { None, Main, BotSetup, Players, LocalSetup, HostSetup, Join, Waiting, Options, Pause, GameOver, Lessons, Stats, Achievements }
+    private enum Screen { None, Main, BotSetup, Players, LocalSetup, HostSetup, Join, Waiting, Options, Pause, GameOver, Lessons, Stats, Achievements, History }
 
     private const float BigButtonHeight = 84f;
 
@@ -172,7 +172,8 @@ public class MenuManager : MonoBehaviour
             case Screen.Lessons:
             case Screen.Stats:
             case Screen.Players: Show(Screen.Main); break;
-            case Screen.Achievements: Show(Screen.Stats); break;
+            case Screen.Achievements:
+            case Screen.History: Show(Screen.Stats); break;
             case Screen.LocalSetup:
             case Screen.HostSetup:
             case Screen.Join: Show(Screen.Players); break;
@@ -217,6 +218,8 @@ public class MenuManager : MonoBehaviour
             mReviewButton.gameObject.SetActive(mGame.CanReview);
         if (screen == Screen.Achievements)
             RefreshAchievements();
+        if (screen == Screen.History)
+            RefreshHistory();
     }
 
     private void StartBotGame()
@@ -381,7 +384,17 @@ public class MenuManager : MonoBehaviour
         StartCoroutine(ShowGameOverLater());
     }
 
-    private void OnReviewClosed() => Show(Screen.GameOver);
+    private void OnReviewClosed()
+    {
+        if (mGame.ViewingRecord)
+        {
+            // Разбор прошлой партии закрыли — обратно к списку.
+            mGame.StopGame();
+            Show(Screen.History);
+        }
+        else
+            Show(Screen.GameOver);
+    }
 
     private void PlayAgain()
     {
@@ -625,6 +638,7 @@ public class MenuManager : MonoBehaviour
         mScreens[Screen.Lessons] = BuildLessons();
         mScreens[Screen.Stats] = BuildStats();
         mScreens[Screen.Achievements] = BuildAchievements();
+        mScreens[Screen.History] = BuildHistory();
     }
 
     /// <summary>Кнопка «Меню» поверх доски во время партии.</summary>
@@ -936,11 +950,131 @@ public class MenuManager : MonoBehaviour
         var ach = UiKit.CreatePlateButton(root, L.T("Достижения"), new Vector2(320, 72), () => Show(Screen.Achievements), 30);
         var art = (RectTransform)ach.transform;
         art.anchorMin = art.anchorMax = art.pivot = new Vector2(0.5f, 0);
-        art.anchoredPosition = new Vector2(0, Platform.Portrait ? 150 : 56); // на узком экране — над «Сбросить»
+        art.anchoredPosition = Platform.Portrait ? new Vector2(0, 150) : new Vector2(-175, 56); // на узком экране — над «Сбросить»
+
+        var games = UiKit.CreatePlateButton(root, L.T("Прошлые партии"), new Vector2(320, 72), () => Show(Screen.History), 30);
+        var grt = (RectTransform)games.transform;
+        grt.anchorMin = grt.anchorMax = grt.pivot = new Vector2(0.5f, 0);
+        grt.anchoredPosition = Platform.Portrait ? new Vector2(0, 234) : new Vector2(175, 56);
 
         BottomBar(root, () => Show(Screen.Main), null, null);
         return root.gameObject;
     }
+
+    #region Прошлые партии
+
+    private RectTransform mHistoryList;
+    private Text mHistoryEmpty;
+
+    /// <summary>«Прошлые партии»: список последних партий (новые сверху); нажатие открывает разбор.</summary>
+    private GameObject BuildHistory()
+    {
+        var root = ScreenRoot("History", UiKit.Background);
+        Title(root, L.T("Прошлые партии"), 64, new Vector2(0, -50));
+
+        // Прокручиваемый список между заголовком и кнопкой «назад».
+        var view = UiKit.CreateUi("View", root, typeof(Image), typeof(RectMask2D), typeof(ScrollRect));
+        view.anchorMin = Vector2.zero;
+        view.anchorMax = Vector2.one;
+        view.offsetMin = new Vector2(0, 150);
+        view.offsetMax = new Vector2(0, -150);
+        view.GetComponent<Image>().color = Color.clear;
+
+        mHistoryList = UiKit.CreateColumn("List", view, 8);
+        mHistoryList.anchorMin = mHistoryList.anchorMax = new Vector2(0.5f, 1);
+        mHistoryList.pivot = new Vector2(0.5f, 1);
+        mHistoryList.anchoredPosition = Vector2.zero;
+
+        var scroll = view.GetComponent<ScrollRect>();
+        scroll.content = mHistoryList;
+        scroll.viewport = view;
+        scroll.horizontal = false;
+        scroll.movementType = ScrollRect.MovementType.Clamped;
+        scroll.scrollSensitivity = 40;
+
+        mHistoryEmpty = UiKit.CreateText("Empty", root, L.T("Здесь появятся законченные партии: с ботом, вдвоём и по сети."),
+            26, new Color(0.82f, 0.86f, 0.9f, 1f));
+        UiKit.FitText(mHistoryEmpty, 1000, 80);
+        Place(mHistoryEmpty.transform, new Vector2(0.5f, 0.5f), Vector2.zero);
+
+        BottomBar(root, () => Show(Screen.Stats), null, null);
+        return root.gameObject;
+    }
+
+    private void RefreshHistory()
+    {
+        for (int i = mHistoryList.childCount - 1; i >= 0; i--)
+            Destroy(mHistoryList.GetChild(i).gameObject);
+
+        List<GameRecord> records = GameHistory.Load();
+        mHistoryEmpty.gameObject.SetActive(records.Count == 0);
+        float width = UiKit.Wide(1100);
+        foreach (GameRecord rec in records)
+        {
+            var card = UiKit.CreateUi("Game", mHistoryList, typeof(Image), typeof(Button));
+            card.sizeDelta = new Vector2(width, Platform.Portrait ? 92 : 64);
+            card.GetComponent<Image>().color = new Color32(16, 36, 48, 210);
+            GameRecord captured = rec;
+            card.GetComponent<Button>().onClick.AddListener(() => OpenRecord(captured));
+
+            string info = rec.Date.ToString("dd.MM.yyyy HH:mm") + "   " + OpponentName(rec) + "   "
+                + L.F("ходов: {0}", (rec.Moves.Count + 1) / 2);
+            var left = UiKit.CreateText("Info", card, info, 24, UiKit.TextLight, TextAnchor.MiddleLeft, shadow: false);
+            var lrt = (RectTransform)left.transform;
+            lrt.anchorMin = Vector2.zero;
+            lrt.anchorMax = Vector2.one;
+            lrt.offsetMin = new Vector2(20, 0);
+            lrt.offsetMax = new Vector2(-230, 0);
+            left.horizontalOverflow = HorizontalWrapMode.Wrap;
+
+            (string result, Color color) = ResultText(rec);
+            var right = UiKit.CreateText("Result", card, result, 26, color, TextAnchor.MiddleRight, shadow: false);
+            right.fontStyle = FontStyle.Bold;
+            var rrt = (RectTransform)right.transform;
+            rrt.anchorMin = new Vector2(1, 0);
+            rrt.anchorMax = Vector2.one;
+            rrt.pivot = new Vector2(1, 0.5f);
+            rrt.offsetMin = new Vector2(-230, 0);
+            rrt.offsetMax = new Vector2(-20, 0);
+        }
+    }
+
+    private void OpenRecord(GameRecord record)
+    {
+        if (mGame.OpenRecord(record))
+            Show(Screen.None);
+    }
+
+    private static string OpponentName(GameRecord rec)
+    {
+        switch (rec.Opponent)
+        {
+            case RecordOpponent.Net: return L.T("По сети");
+            case RecordOpponent.Local: return L.T("Вдвоём");
+        }
+        switch (rec.Difficulty)
+        {
+            case BotDifficulty.Easy: return L.T("Бот: новичок");
+            case BotDifficulty.Medium: return L.T("Бот: любитель");
+            case BotDifficulty.Hard: return L.T("Бот: сильный");
+            default: return L.T("Бот: мастер");
+        }
+    }
+
+    private static (string, Color) ResultText(GameRecord rec)
+    {
+        var gold = new Color32(255, 215, 106, 255);
+        var grey = new Color(0.75f, 0.78f, 0.8f, 1f);
+        if (rec.Result == GameResult.Draw)
+            return (L.T("Ничья"), grey);
+        if (rec.Opponent == RecordOpponent.Local)
+            return (rec.Result == GameResult.WhiteWins ? L.T("Белые победили") : L.T("Чёрные победили"), gold);
+        return rec.PlayerWon == true
+            ? (L.T("Победа"), (Color)new Color32(140, 230, 140, 255))
+            : (L.T("Поражение"), (Color)new Color32(240, 120, 110, 255));
+    }
+
+    #endregion
 
     /// <summary>«Достижения»: две колонки карточек, открытые — яркие, закрытые — приглушённые.</summary>
     private GameObject BuildAchievements()
