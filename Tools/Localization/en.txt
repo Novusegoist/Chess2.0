@@ -384,3 +384,12 @@ Loss
 Rating: {0}
 Rating
 best: {0}   ·   games: {1}
+Steam leaderboards
+Daily puzzle streak
+Kings felled
+Global
+Friends
+Loading…
+Nobody yet. Play a game and be the first!
+Steam did not respond, try again later
+Leaderboard is unavailable

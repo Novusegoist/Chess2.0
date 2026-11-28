@@ -19,7 +19,7 @@ using UnityEngine.InputSystem;
 [RequireComponent(typeof(GameManager))]
 public class MenuManager : MonoBehaviour
 {
-    private enum Screen { None, Main, BotSetup, Players, LocalSetup, HostSetup, Join, Waiting, Options, Pause, GameOver, Lessons, Stats, Achievements, History }
+    private enum Screen { None, Main, BotSetup, Players, LocalSetup, HostSetup, Join, Waiting, Options, Pause, GameOver, Lessons, Stats, Achievements, History, Leaders }
 
     private const float BigButtonHeight = 84f;
 
@@ -129,6 +129,7 @@ public class MenuManager : MonoBehaviour
         SteamService steam = SteamService.Instance;
         if (steam != null && steam.Ready)
         {
+            SteamLeaderboards.SyncAll(); // то, что набрано до запуска Steam или без него
             steam.InviteAccepted += JoinSteamLobby;
             // Игру запустили из приглашения друга в Steam.
             if (steam.TryTakePendingInvite(out ulong lobby))
@@ -138,6 +139,7 @@ public class MenuManager : MonoBehaviour
 
     void OnDestroy()
     {
+        SteamLeaderboards.NamesChanged -= OnLeaderNamesChanged;
         if (mGame != null)
         {
             mGame.GameEnded -= OnGameEnded;
@@ -177,7 +179,8 @@ public class MenuManager : MonoBehaviour
             case Screen.Stats:
             case Screen.Players: Show(Screen.Main); break;
             case Screen.Achievements:
-            case Screen.History: Show(Screen.Stats); break;
+            case Screen.History:
+            case Screen.Leaders: Show(Screen.Stats); break;
             case Screen.LocalSetup:
             case Screen.HostSetup:
             case Screen.Join: Show(Screen.Players); break;
@@ -224,6 +227,10 @@ public class MenuManager : MonoBehaviour
             RefreshAchievements();
         if (screen == Screen.History)
             RefreshHistory();
+        if (screen == Screen.Leaders)
+            RefreshLeaders();
+        if (screen == Screen.Stats && mLeadersButton != null)
+            mLeadersButton.gameObject.SetActive(SteamLeaderboards.Available);
     }
 
     private void StartBotGame()
@@ -646,6 +653,7 @@ public class MenuManager : MonoBehaviour
         mScreens[Screen.Stats] = BuildStats();
         mScreens[Screen.Achievements] = BuildAchievements();
         mScreens[Screen.History] = BuildHistory();
+        mScreens[Screen.Leaders] = BuildLeaders();
     }
 
     /// <summary>Кнопка «Меню» поверх доски во время партии.</summary>
@@ -978,6 +986,10 @@ public class MenuManager : MonoBehaviour
         art.anchorMin = art.anchorMax = art.pivot = new Vector2(0.5f, 0);
         art.anchoredPosition = Platform.Portrait ? new Vector2(0, 150) : new Vector2(-175, 56); // на узком экране — над «Сбросить»
 
+        // Таблицы лидеров Steam — только на ПК и только когда Steam запущен.
+        mLeadersButton = UiKit.CreatePlateButton(root, L.T("Лидеры Steam"), new Vector2(280, 64), () => Show(Screen.Leaders), 28);
+        Place(mLeadersButton.transform, new Vector2(1, 1), new Vector2(-180, -64));
+
         var games = UiKit.CreatePlateButton(root, L.T("Прошлые партии"), new Vector2(320, 72), () => Show(Screen.History), 30);
         var grt = (RectTransform)games.transform;
         grt.anchorMin = grt.anchorMax = grt.pivot = new Vector2(0.5f, 0);
@@ -986,6 +998,122 @@ public class MenuManager : MonoBehaviour
         BottomBar(root, () => Show(Screen.Main), null, null);
         return root.gameObject;
     }
+
+    #region Лидеры Steam
+
+    private MenuButton mLeadersButton;
+    private readonly List<MenuButton> mLeaderTabs = new List<MenuButton>();
+    private readonly List<MenuButton> mLeaderScopes = new List<MenuButton>();
+    private SteamLeaderboards.Board mLeaderBoard;
+    private bool mLeaderFriends;
+    private int mLeaderRequest;
+    private RectTransform mLeaderList;
+    private Text mLeaderStatus;
+    private List<LeaderRow> mLeaderRows = new List<LeaderRow>();
+
+    /// <summary>«Лидеры Steam»: три таблицы (рейтинг, серия задач, короли), весь мир или друзья.</summary>
+    private GameObject BuildLeaders()
+    {
+        var root = ScreenRoot("Leaders", UiKit.Background);
+        Title(root, L.T("Лидеры Steam"), 64, new Vector2(0, -50));
+
+        var tabs = UiKit.CreateRow("Boards", root, 16);
+        Place(tabs, new Vector2(0.5f, 1), new Vector2(0, -150));
+        string[] names = { L.T("Рейтинг"), L.T("Серия задач дня"), L.T("Королей повержено") };
+        for (int i = 0; i < names.Length; i++)
+        {
+            var board = (SteamLeaderboards.Board)i;
+            mLeaderTabs.Add(UiKit.CreatePlateButton(tabs, names[i], new Vector2(300, 60), () =>
+            {
+                mLeaderBoard = board;
+                RefreshLeaders();
+            }, 26));
+        }
+
+        var scopes = UiKit.CreateRow("Scope", root, 16);
+        Place(scopes, new Vector2(0.5f, 1), new Vector2(0, -225));
+        mLeaderScopes.Add(UiKit.CreatePlateButton(scopes, L.T("Весь мир"), new Vector2(220, 52), () =>
+        {
+            mLeaderFriends = false;
+            RefreshLeaders();
+        }, 24));
+        mLeaderScopes.Add(UiKit.CreatePlateButton(scopes, L.T("Друзья"), new Vector2(220, 52), () =>
+        {
+            mLeaderFriends = true;
+            RefreshLeaders();
+        }, 24));
+
+        mLeaderList = UiKit.CreateColumn("List", root, 4);
+        Place(mLeaderList, new Vector2(0.5f, 1), new Vector2(0, -290));
+
+        mLeaderStatus = UiKit.CreateText("Status", root, "", 26, new Color(0.82f, 0.86f, 0.9f, 1f));
+        UiKit.FitText(mLeaderStatus, 1000, 80);
+        Place(mLeaderStatus.transform, new Vector2(0.5f, 0.5f), new Vector2(0, -40));
+
+        SteamLeaderboards.NamesChanged += OnLeaderNamesChanged;
+
+        BottomBar(root, () => Show(Screen.Stats), null, null);
+        return root.gameObject;
+    }
+
+    private void OnLeaderNamesChanged()
+    {
+        if (this != null && mCurrent == Screen.Leaders)
+            DrawLeaderRows();
+    }
+
+    private void RefreshLeaders()
+    {
+        for (int i = 0; i < mLeaderTabs.Count; i++)
+            mLeaderTabs[i].SetSelected(i == (int)mLeaderBoard);
+        mLeaderScopes[0].SetSelected(!mLeaderFriends);
+        mLeaderScopes[1].SetSelected(mLeaderFriends);
+
+        mLeaderRows.Clear();
+        DrawLeaderRows();
+        mLeaderStatus.text = L.T("Загрузка…");
+        mLeaderStatus.gameObject.SetActive(true);
+
+        // Ответ на старый запрос (успели переключить вкладку) пропускаем.
+        int request = ++mLeaderRequest;
+        SteamLeaderboards.Download(mLeaderBoard, mLeaderFriends, (rows, error) =>
+        {
+            if (this == null || request != mLeaderRequest)
+                return;
+            mLeaderRows = rows;
+            DrawLeaderRows();
+            mLeaderStatus.text = error ?? (rows.Count == 0 ? L.T("Пока никого. Сыграй партию — и ты будешь первым!") : "");
+            mLeaderStatus.gameObject.SetActive(mLeaderStatus.text.Length > 0);
+        });
+    }
+
+    private void DrawLeaderRows()
+    {
+        for (int i = mLeaderList.childCount - 1; i >= 0; i--)
+            Destroy(mLeaderList.GetChild(i).gameObject);
+        foreach (LeaderRow row in mLeaderRows)
+        {
+            var card = UiKit.CreateUi("Row", mLeaderList, typeof(Image));
+            card.sizeDelta = new Vector2(UiKit.Wide(900), 40);
+            card.GetComponent<Image>().color = row.IsMe ? new Color32(90, 70, 20, 220) : new Color32(16, 36, 48, 200);
+            Color c = row.IsMe ? (Color)new Color32(255, 215, 106, 255) : UiKit.TextLight;
+
+            LeaderCell(card, "#" + row.Rank, 0, 120, TextAnchor.MiddleLeft, c);
+            LeaderCell(card, SteamLeaderboards.NameOf(row.SteamId), 120, card.sizeDelta.x - 300, TextAnchor.MiddleLeft, c);
+            LeaderCell(card, row.Score.ToString(), card.sizeDelta.x - 180, 160, TextAnchor.MiddleRight, c);
+        }
+    }
+
+    private static void LeaderCell(RectTransform card, string text, float x, float width, TextAnchor align, Color color)
+    {
+        var t = UiKit.CreateText("Cell", card, text, 24, color, align, shadow: false);
+        var rt = (RectTransform)t.transform;
+        rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0, 0.5f);
+        rt.anchoredPosition = new Vector2(x + 16, 0);
+        rt.sizeDelta = new Vector2(width - 16, 40);
+    }
+
+    #endregion
 
     #region Прошлые партии
 

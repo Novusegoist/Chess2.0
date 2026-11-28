@@ -62,6 +62,7 @@ public static class DailyChallenge
         Achievements.Unlock("daily_first");
         if (streak >= 7)
             Achievements.Unlock("daily_week");
+        SteamLeaderboards.SyncAll(); // лучшая серия — в таблицу лидеров Steam (только ПК)
     }
 
     private static readonly string[] MonthsRu =

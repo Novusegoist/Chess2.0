@@ -391,5 +391,14 @@ public static partial class L
         { "Рейтинг: {0}", "Rating: {0}" },
         { "Рейтинг", "Rating" },
         { "лучший: {0}   ·   партий: {1}", "best: {0}   ·   games: {1}" },
+        { "Лидеры Steam", "Steam leaderboards" },
+        { "Серия задач дня", "Daily puzzle streak" },
+        { "Королей повержено", "Kings felled" },
+        { "Весь мир", "Global" },
+        { "Друзья", "Friends" },
+        { "Загрузка…", "Loading…" },
+        { "Пока никого. Сыграй партию — и ты будешь первым!", "Nobody yet. Play a game and be the first!" },
+        { "Steam не ответил, попробуй позже", "Steam did not respond, try again later" },
+        { "Таблица лидеров недоступна", "Leaderboard is unavailable" },
     };
 }

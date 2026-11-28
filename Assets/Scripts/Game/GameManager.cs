@@ -958,6 +958,7 @@ public class GameManager : MonoBehaviour
             LastRatingChange = GameStats.ApplyRated(opponent, score);
             NetMatch.LocalRating = GameStats.Rating;
         }
+        SteamLeaderboards.SyncAll(); // рейтинг и повергнутые короли — в таблицы лидеров Steam (только ПК)
 
         // Достижения за победу (против бота и по сети).
         if (outcome != GameStats.Outcome.Win || row == GameStats.LocalRow)
