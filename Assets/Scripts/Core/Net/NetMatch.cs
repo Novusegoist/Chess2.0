@@ -128,6 +128,15 @@ namespace Chess2.Core.Net
         /// <summary>Настройки текущей партии (у гостя — после первого SETUP).</summary>
         public NetSetup Setup { get; private set; }
 
+        /// <summary>
+        /// Свой рейтинг — отправляется сопернику при подключении (игра выставляет его перед подключением).
+        /// Старые версии без рейтинга строку RATING просто пропускают — версия протокола та же.
+        /// </summary>
+        public static int LocalRating { get; set; } = Elo.Start;
+
+        /// <summary>Рейтинг соперника; null — соперник его не прислал (старая версия игры).</summary>
+        public int? RemoteRating { get; private set; }
+
         public bool InGame => Setup != null;
         public Side LocalSide => Role == NetRole.Host ? Setup.HostSide : Setup.HostSide.Opponent();
         public bool RemoteWantsRematch { get; private set; }
@@ -205,6 +214,7 @@ namespace Chess2.Core.Net
                 _helloSent = true;
                 _lastReceived = Now; // отсчёт тишины — с момента подключения
                 Transport.Send("HELLO " + ProtocolVersion);
+                Transport.Send("RATING " + LocalRating.ToString(CultureInfo.InvariantCulture));
             }
 
             while (Transport.TryReceive(out string line))
@@ -390,6 +400,10 @@ namespace Chess2.Core.Net
 
                 case "BYE":
                     Transport.Close();
+                    break;
+
+                case "RATING":
+                    RemoteRating = Math.Max(Elo.Floor, Math.Min(4000, int.Parse(a[1], CultureInfo.InvariantCulture)));
                     break;
             }
         }

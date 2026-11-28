@@ -381,3 +381,6 @@ Two players
 Draw
 Win
 Loss
+Rating: {0}
+Rating
+best: {0}   ·   games: {1}

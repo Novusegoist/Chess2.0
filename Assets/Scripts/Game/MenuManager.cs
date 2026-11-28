@@ -31,6 +31,9 @@ public class MenuManager : MonoBehaviour
     private GameObject mHud;
     private Text mGameOverText;
     private Text mGameOverInfo;
+    private Text mGameOverRating;
+    private Text mStatsRating;
+    private RectTransform mStatsGraph;
     private MenuButton mAgainButton;
     private MenuButton mRestartButton;
     private MenuButton mResignButton;
@@ -80,6 +83,7 @@ public class MenuManager : MonoBehaviour
     internal static void Bootstrap()
     {
         L.Reload();
+        NetMatch.LocalRating = GameStats.Rating; // сопернику по сети при подключении
         // Steam живёт отдельно от интерфейса: при смене языка интерфейс пересобирается, а Steam — нет.
         if (SteamService.Instance == null)
         {
@@ -381,6 +385,9 @@ public class MenuManager : MonoBehaviour
         mAgainButton.SetText(mGame.Net != null ? L.T("Реванш") : L.T("Ещё раз"));
         mAgainButton.gameObject.SetActive(mGame.Net == null || net);
         mGameOverInfo.text = mGame.Net != null && mGame.Net.RemoteWantsRematch ? L.T("Соперник предлагает реванш!") : "";
+        int? change = mGame.LastRatingChange;
+        mGameOverRating.text = change == null ? ""
+            : L.F("Рейтинг: {0}", GameStats.Rating) + "  " + RatingDelta(change.Value);
         StartCoroutine(ShowGameOverLater());
     }
 
@@ -937,6 +944,25 @@ public class MenuManager : MonoBehaviour
                 mStatsCells.Add(StatsCell(row, "0", 200, 30, UiKit.TextLight));
         }
 
+        // Рейтинг: число и график последних партий. На ПК — справа от таблицы, на телефоне — под сводкой.
+        var ratingBox = UiKit.CreateUi("Rating", root);
+        ratingBox.sizeDelta = new Vector2(300, 230);
+        if (Platform.Portrait)
+            Place(ratingBox, new Vector2(0.5f, 1), new Vector2(0, -820));
+        else
+            Place(ratingBox, new Vector2(1, 1), new Vector2(-190, -290));
+        mStatsRating = UiKit.CreateText("Value", ratingBox, "", 24, light);
+        mStatsRating.supportRichText = true;
+        var vrt = (RectTransform)mStatsRating.transform;
+        vrt.anchorMin = vrt.anchorMax = vrt.pivot = new Vector2(0.5f, 1);
+        vrt.anchoredPosition = Vector2.zero;
+        vrt.sizeDelta = new Vector2(300, 130);
+        mStatsGraph = UiKit.CreateUi("Graph", ratingBox, typeof(Image));
+        mStatsGraph.GetComponent<Image>().color = new Color32(16, 36, 48, 170);
+        mStatsGraph.anchorMin = mStatsGraph.anchorMax = mStatsGraph.pivot = new Vector2(0.5f, 0);
+        mStatsGraph.anchoredPosition = Vector2.zero;
+        mStatsGraph.sizeDelta = new Vector2(280, 90);
+
         mStatsSummary = UiKit.CreateText("Summary", root, "", 24, light);
         UiKit.FitText(mStatsSummary, 1100, 120);
         Place(mStatsSummary.transform, new Vector2(0.5f, 1), new Vector2(0, -560));
@@ -1161,6 +1187,46 @@ public class MenuManager : MonoBehaviour
 
         mStatsResetArmed = false;
         mStatsReset.SetText(L.T("Сбросить"));
+        RefreshRating();
+    }
+
+    private static string RatingDelta(int d) =>
+        d > 0 ? "<color=#8CE68C>+" + d + "</color>" : d < 0 ? "<color=#F0786E>" + d + "</color>" : "<color=#BBBBBB>±0</color>";
+
+    /// <summary>Рейтинг в статистике: число, лучший, и столбики — рейтинг после каждой из последних партий.</summary>
+    private void RefreshRating()
+    {
+        int[] history = GameStats.RatingHistory;
+        string last = history.Length >= 2 ? "  " + RatingDelta(history[history.Length - 1] - history[history.Length - 2]) : "";
+        mStatsRating.text = L.T("Рейтинг") + "\n<size=54><b>" + GameStats.Rating + "</b></size>" + last + "\n"
+            + "<size=20>" + L.F("лучший: {0}   ·   партий: {1}", GameStats.PeakRating, GameStats.RatedGames) + "</size>";
+
+        for (int i = mStatsGraph.childCount - 1; i >= 0; i--)
+            Destroy(mStatsGraph.GetChild(i).gameObject);
+        mStatsGraph.gameObject.SetActive(history.Length >= 2);
+        if (history.Length < 2)
+            return;
+
+        int min = int.MaxValue, max = int.MinValue;
+        foreach (int v in history)
+        {
+            min = Mathf.Min(min, v);
+            max = Mathf.Max(max, v);
+        }
+        float range = Mathf.Max(40, max - min); // плоский график, если рейтинг почти не менялся
+        float w = mStatsGraph.sizeDelta.x - 12, h = mStatsGraph.sizeDelta.y - 12;
+        float step = w / history.Length;
+        for (int i = 0; i < history.Length; i++)
+        {
+            var bar = UiKit.CreateUi("Bar", mStatsGraph, typeof(Image));
+            bool up = i == 0 || history[i] >= history[i - 1];
+            bar.GetComponent<Image>().color = up ? new Color32(255, 215, 106, 255) : new Color32(200, 120, 100, 255);
+            bar.GetComponent<Image>().raycastTarget = false;
+            bar.anchorMin = bar.anchorMax = bar.pivot = Vector2.zero;
+            float bh = 6 + (h - 6) * (history[i] - min) / range;
+            bar.sizeDelta = new Vector2(Mathf.Max(2, step - 2), bh);
+            bar.anchoredPosition = new Vector2(6 + i * step, 6);
+        }
     }
 
     /// <summary>Сброс — только со второго нажатия.</summary>
@@ -1173,6 +1239,7 @@ public class MenuManager : MonoBehaviour
             return;
         }
         GameStats.Reset();
+        NetMatch.LocalRating = GameStats.Rating;
         RefreshStats();
     }
 
@@ -1204,7 +1271,10 @@ public class MenuManager : MonoBehaviour
         var root = ScreenRoot("GameOver", new Color(0.05f, 0.06f, 0.05f, 0.8f));
         mGameOverText = Title(root, "", 56, new Vector2(0, -200));
         mGameOverInfo = UiKit.CreateText("Info", root, "", 28, new Color32(255, 200, 120, 255));
-        Place(mGameOverInfo.transform, new Vector2(0.5f, 1), new Vector2(0, -290));
+        Place(mGameOverInfo.transform, new Vector2(0.5f, 1), new Vector2(0, -292));
+        mGameOverRating = UiKit.CreateText("Rating", root, "", 26, UiKit.TextLight);
+        mGameOverRating.supportRichText = true;
+        Place(mGameOverRating.transform, new Vector2(0.5f, 1), new Vector2(0, -256));
 
         var col = UiKit.CreateColumn("Buttons", root, 22);
         Place(col, new Vector2(0.5f, 0.5f), new Vector2(0, -40));

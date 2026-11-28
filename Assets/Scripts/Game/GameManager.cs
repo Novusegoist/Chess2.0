@@ -926,9 +926,13 @@ public class GameManager : MonoBehaviour
         return Reviewing;
     }
 
+    /// <summary>На сколько изменился рейтинг за только что законченную партию; null — партия не рейтинговая.</summary>
+    public int? LastRatingChange { get; private set; }
+
     /// <summary>Итог партии — в статистику (уроки не считаются).</summary>
     private void RecordStats()
     {
+        LastRatingChange = null;
         if (Lesson != null)
             return;
         int row = Net != null ? GameStats.NetRow
@@ -945,6 +949,15 @@ public class GameManager : MonoBehaviour
             outcome = winner == us ? GameStats.Outcome.Win : GameStats.Outcome.Loss;
         }
         GameStats.Record(row, outcome);
+
+        // Рейтинг: против бота (у уровня свой рейтинг) и по сети (рейтинг прислал соперник).
+        if (row != GameStats.LocalRow)
+        {
+            int opponent = Net != null ? Net.RemoteRating ?? GameStats.Rating : Elo.BotRating(BotDifficulty);
+            double score = outcome == GameStats.Outcome.Win ? 1 : outcome == GameStats.Outcome.Draw ? 0.5 : 0;
+            LastRatingChange = GameStats.ApplyRated(opponent, score);
+            NetMatch.LocalRating = GameStats.Rating;
+        }
 
         // Достижения за победу (против бота и по сети).
         if (outcome != GameStats.Outcome.Win || row == GameStats.LocalRow)

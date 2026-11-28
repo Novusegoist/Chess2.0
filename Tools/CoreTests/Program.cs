@@ -71,6 +71,7 @@ internal static class Program
         Run("Сохранение партии: позиция, флаги, пассажиры и часы восстанавливаются точно", SaveRoundTrip);
         Run("Сохранение партии: повреждённый файл не загружается", SaveRejectsGarbage);
         Run("Прошлые партии: запись читается и повторяется ход в ход", RecordReplays);
+        Run("Рейтинг: победа над сильным даёт больше, ничья с равным — ноль, ниже пола не падает", EloChanges);
         Run("Разбор: взять висящего ферзя — лучший ход, пропустить — ошибка", ReviewFindsMissedQueen);
         Run("Задачи дня: файл читается, решения — допустимые ходы, день выбирается по дате", DailyPuzzlesValid);
         foreach (Lesson lesson in Tutorial.Lessons)
@@ -1490,6 +1491,19 @@ internal static class Program
         }
         True(!GameRecord.TryParse("", out _), "пустая");
         True(!GameRecord.TryParse("record 1 0 0 0 0 0 0", out _), "без позиции");
+    }
+
+    private static void EloChanges()
+    {
+        Eq(0, Elo.Change(1000, 1000, 0.5, 50), "ничья с равным");
+        Eq(20, Elo.Change(1000, 1000, 1, 0), "победа над равным в начале (K=40)");
+        Eq(12, Elo.Change(1000, 1000, 1, 30), "победа над равным потом (K=24)");
+        Eq(-12, Elo.Change(1000, 1000, 0, 30), "поражение от равного");
+        True(Elo.Change(1000, 1800, 1, 30) > Elo.Change(1000, 600, 1, 30), "победа над мастером ценнее");
+        True(Elo.Change(1000, 600, 0, 30) < Elo.Change(1000, 1800, 0, 30), "поражение от новичка обиднее");
+        Eq(-5, Elo.Change(Elo.Floor + 5, Elo.Floor + 5, 0, 0), "ниже пола не падает: только до 100");
+        for (BotDifficulty d = BotDifficulty.Easy; d < BotDifficulty.Expert; d++)
+            True(Elo.BotRating(d) < Elo.BotRating(d + 1), "уровни бота по возрастанию");
     }
 
     private static void SaveRejectsGarbage()

@@ -67,8 +67,61 @@ public static class GameStats
         PlayerPrefs.DeleteKey(Prefix + "streak");
         PlayerPrefs.DeleteKey(Prefix + "bestStreak");
         PlayerPrefs.DeleteKey(Prefix + "kingsFelled");
+        PlayerPrefs.DeleteKey(Prefix + "rating");
+        PlayerPrefs.DeleteKey(Prefix + "ratingPeak");
+        PlayerPrefs.DeleteKey(Prefix + "ratedGames");
+        PlayerPrefs.DeleteKey(Prefix + "ratingHistory");
         PlayerPrefs.Save();
     }
+
+    #region Рейтинг
+
+    public static int Rating => PlayerPrefs.GetInt(Prefix + "rating", Elo.Start);
+    public static int PeakRating => PlayerPrefs.GetInt(Prefix + "ratingPeak", Elo.Start);
+    public static int RatedGames => PlayerPrefs.GetInt(Prefix + "ratedGames", 0);
+
+    /// <summary>Рейтинг после каждой из последних HistoryLength партий (для графика), старые — первыми.</summary>
+    public static int[] RatingHistory
+    {
+        get
+        {
+            string s = PlayerPrefs.GetString(Prefix + "ratingHistory", "");
+            if (s.Length == 0)
+                return new int[0];
+            string[] parts = s.Split(',');
+            var list = new System.Collections.Generic.List<int>(parts.Length);
+            foreach (string p in parts)
+                if (int.TryParse(p, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out int v))
+                    list.Add(v);
+            return list.ToArray();
+        }
+    }
+
+    public const int HistoryLength = 40;
+
+    /// <summary>Учесть рейтинговую партию. score: 1 — победа, 0.5 — ничья, 0 — поражение. Возвращает изменение.</summary>
+    public static int ApplyRated(int opponentRating, double score)
+    {
+        int before = Rating;
+        int delta = Elo.Change(before, opponentRating, score, RatedGames);
+        int after = before + delta;
+        PlayerPrefs.SetInt(Prefix + "rating", after);
+        PlayerPrefs.SetInt(Prefix + "ratedGames", RatedGames + 1);
+        if (after > PeakRating)
+            PlayerPrefs.SetInt(Prefix + "ratingPeak", after);
+
+        var history = new System.Collections.Generic.List<int>(RatingHistory);
+        if (history.Count == 0)
+            history.Add(before); // начальная точка графика
+        history.Add(after);
+        if (history.Count > HistoryLength)
+            history.RemoveRange(0, history.Count - HistoryLength);
+        PlayerPrefs.SetString(Prefix + "ratingHistory", string.Join(",", history));
+        PlayerPrefs.Save();
+        return delta;
+    }
+
+    #endregion
 
     public static int BotRow(BotDifficulty d) => Mathf.Clamp((int)d, 0, 3);
 
