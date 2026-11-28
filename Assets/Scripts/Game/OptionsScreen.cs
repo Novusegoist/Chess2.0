@@ -84,12 +84,32 @@ public class OptionsScreen
         }, 32));
     }
 
+    /// <summary>
+    /// Вкладка опций: строки в колонке, которая прокручивается (колесо мыши, перетаскивание, свайп),
+    /// если не помещается между вкладками и кнопками внизу. Вкладка целиком — col.parent.
+    /// </summary>
     private static RectTransform Panel(Transform root, string name)
     {
-        var col = UiKit.CreateColumn(name, root, 8);
+        var view = UiKit.CreateUi(name, root, typeof(Image), typeof(RectMask2D), typeof(ScrollRect));
+        view.anchorMin = Vector2.zero;
+        view.anchorMax = Vector2.one;
+        view.offsetMin = new Vector2(0, 150);   // над «назад» и «сохранить»
+        view.offsetMax = new Vector2(0, -225);  // под вкладками
+        view.GetComponent<Image>().color = Color.clear; // чтобы ловить свайп и между строками
+
+        var col = UiKit.CreateColumn("Rows", view, 8);
         col.anchorMin = col.anchorMax = new Vector2(0.5f, 1);
         col.pivot = new Vector2(0.5f, 1);
-        col.anchoredPosition = new Vector2(0, -230);
+        col.anchoredPosition = new Vector2(0, -5);
+        var layout = col.GetComponent<VerticalLayoutGroup>();
+        layout.padding = new RectOffset(0, 0, 5, 20);
+
+        var scroll = view.GetComponent<ScrollRect>();
+        scroll.content = col;
+        scroll.viewport = view;
+        scroll.horizontal = false;
+        scroll.movementType = ScrollRect.MovementType.Clamped;
+        scroll.scrollSensitivity = 40;
         return col;
     }
 
@@ -144,7 +164,7 @@ public class OptionsScreen
             Note(col, L.T("F11 — окно ⇄ полный экран. Окно можно тянуть мышкой за край.\nРежим экрана и разрешение работают только в собранной игре, не в редакторе."));
         else
             Note(col, L.T("Меньше кадров в секунду — телефон меньше греется и дольше работает от батареи."));
-        return col.gameObject;
+        return col.parent.gameObject;
     }
 
     /// <summary>Строки «Экран» и «Разрешение / Размер окна» — только на ПК.</summary>
@@ -243,7 +263,7 @@ public class OptionsScreen
         // Авторство сторонних материалов (лицензия CC BY-SA эмодзи требует указать его в игре).
         Note(col, L.T("Звуки — Kenney (kenney.nl). Музыка — joth, omfgdude, cynicmusic (OpenGameArt). Всё под CC0.\n")
                   + L.T("Эмодзи в чате — OpenMoji (openmoji.org), лицензия CC BY-SA 4.0."));
-        return col.gameObject;
+        return col.parent.gameObject;
     }
 
     private void AddVolume(Transform col, string label, Func<float> get, Action<float> set)
@@ -286,6 +306,14 @@ public class OptionsScreen
         UiKit.FitText(mLanguageNote, 1000, 32);
         mLanguageNote.gameObject.SetActive(false);
 
+        // Тема доски: перекрашивается сразу, даже посреди партии.
+        var theme = UiKit.CreateSelector(UiKit.CreateSettingRow(col, L.T("Доска")), d =>
+        {
+            BoardTheme.Select(AppSettings.BoardTheme + d);
+            Refresh();
+        });
+        mRefreshers.Add(() => theme.text = L.T(BoardTheme.Current.Name));
+
         AddToggle(col, L.T("Подсказки ходов"), () => AppSettings.ShowMoveHints, v => AppSettings.ShowMoveHints = v, L.T("Вкл"), L.T("Выкл"));
         AddToggle(col, L.T("Последний ход"), () => AppSettings.ShowLastMove, v => AppSettings.ShowLastMove = v, L.T("Подсвечивать"), L.T("Не подсвечивать"));
         AddToggle(col, L.T("Эффекты"), () => AppSettings.Effects, v => AppSettings.Effects = v, L.T("Вкл"), L.T("Выкл"));
@@ -302,7 +330,7 @@ public class OptionsScreen
         AddToggle(col, L.T("Ферзь ходит и как конь"), () => AppSettings.QueenMovesAsKnight, v => AppSettings.QueenMovesAsKnight = v, L.T("Да"), L.T("Нет"));
         AddToggle(col, L.T("Пробивание слоном и ладьёй"), () => AppSettings.EnablePierce, v => AppSettings.EnablePierce = v, L.T("Да"), L.T("Нет"));
         AddToggle(col, L.T("Пробивать сквозь свои"), () => AppSettings.PierceThroughOwnPieces, v => AppSettings.PierceThroughOwnPieces = v, L.T("Да"), L.T("Нет"));
-        return col.gameObject;
+        return col.parent.gameObject;
     }
 
     #endregion

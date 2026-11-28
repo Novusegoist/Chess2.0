@@ -374,5 +374,12 @@ public static partial class L
         { "Решай задачи дня 7 дней подряд", "Solve daily puzzles 7 days in a row" },
         { "Эффекты", "Effects" },
         { "Вибрация", "Vibration" },
+        { "Доска", "Board" },
+        { "Дерево", "Wood" },
+        { "Пепел", "Ash" },
+        { "Ночь", "Night" },
+        { "Лёд", "Ice" },
+        { "Луг", "Meadow" },
+        { "Аметист", "Amethyst" },
     };
 }

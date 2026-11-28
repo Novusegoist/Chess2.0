@@ -367,3 +367,10 @@ Puzzle week
 Solve daily puzzles 7 days in a row
 Effects
 Vibration
+Board
+Wood
+Ash
+Night
+Ice
+Meadow
+Amethyst

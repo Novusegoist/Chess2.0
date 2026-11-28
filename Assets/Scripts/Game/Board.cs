@@ -59,9 +59,6 @@ public class Board : MonoBehaviour
             var marker = markerGo.GetComponent<Image>();
             marker.raycastTarget = false;
 
-            bool light = (Sq.X(sq) + Sq.Y(sq)) % 2 != 0;
-            mBaseColors[sq] = light ? mLightColor : mDarkColor;
-
             var cell = cellGo.GetComponent<Cell>();
             cell.Setup(sq, gameManager, marker);
             mAllCells[sq] = cell;
@@ -74,6 +71,20 @@ public class Board : MonoBehaviour
             mRankLabels[i] = CreateLabel("Rank " + i, TextAnchor.UpperLeft);
         }
 
+        ApplyTheme();
+        BoardTheme.Changed += ApplyTheme;
+    }
+
+    void OnDestroy() => BoardTheme.Changed -= ApplyTheme;
+
+    /// <summary>Перекрасить клетки и подписи в тему из настроек (меняется в опциях, в том числе посреди партии).</summary>
+    public void ApplyTheme()
+    {
+        BoardTheme theme = BoardTheme.Current;
+        mLightColor = theme.Light;
+        mDarkColor = theme.Dark;
+        for (int sq = 0; sq < 64; sq++)
+            mBaseColors[sq] = (Sq.X(sq) + Sq.Y(sq)) % 2 != 0 ? mLightColor : mDarkColor;
         Layout();
         RefreshColors();
     }

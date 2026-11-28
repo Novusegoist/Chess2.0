@@ -203,6 +203,13 @@ public static class AppSettings
     }
 
     /// <summary>Язык: -1 — как в системе, 0 — русский, 1 — English.</summary>
+    /// <summary>Раскраска доски — номер в BoardTheme.All.</summary>
+    public static int BoardTheme
+    {
+        get => Mathf.Clamp(PlayerPrefs.GetInt(Prefix + "boardTheme", 0), 0, global::BoardTheme.All.Length - 1);
+        set => PlayerPrefs.SetInt(Prefix + "boardTheme", value);
+    }
+
     public static int Language
     {
         get => PlayerPrefs.GetInt(Prefix + "language", -1);
