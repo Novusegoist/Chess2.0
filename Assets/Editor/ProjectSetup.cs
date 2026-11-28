@@ -70,11 +70,13 @@ public static class ProjectSetup
         if (PlayerSettings.defaultInterfaceOrientation != UIOrientation.Portrait)
             PlayerSettings.defaultInterfaceOrientation = UIOrientation.Portrait;
 
-        foreach (NamedBuildTarget target in new[] { NamedBuildTarget.Android, NamedBuildTarget.iOS })
+        // Standalone — это macOS: по идентификатору там хранятся настройки и сохранения игры.
+        foreach (NamedBuildTarget target in new[] { NamedBuildTarget.Android, NamedBuildTarget.iOS, NamedBuildTarget.Standalone })
         {
             string id = PlayerSettings.GetApplicationIdentifier(target);
             // Заводской или временный идентификатор — меняем на настоящий.
-            if (string.IsNullOrEmpty(id) || id.Contains("DefaultCompany") || id == "com.ashandcrown.game")
+            if (string.IsNullOrEmpty(id) || id.Contains("DefaultCompany") || id.Contains("unity.template")
+                || id == "com.ashandcrown.game")
                 PlayerSettings.SetApplicationIdentifier(target, BundleId);
         }
 
